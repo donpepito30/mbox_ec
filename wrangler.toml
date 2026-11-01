@@ -1,0 +1,8 @@
+name = "cinelocal-streaming"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+
+[vars]
+NEXT_PUBLIC_TMDB_BASE_URL = "https://api.themoviedb.org/3"
+# Define NEXT_PUBLIC_TMDB_READ_ACCESS_TOKEN en las variables secretas de Cloudflare Pages

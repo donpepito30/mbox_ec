@@ -1,0 +1,6 @@
+{
+  "name": "Mbox_ec - Streaming",
+  "description": "Plataforma de streaming minimalista para películas y series con reproducción optimizada.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
