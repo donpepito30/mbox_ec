@@ -9,6 +9,36 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #020617; /* slate-950 */
-  color: #f8fafc; /* slate-50 */
+  background-color: #000000; /* Obsidian Black */
+  color: #f8fafc;
+  overflow-x: hidden;
+}
+
+/* Soporte de Navegación D-pad y Control Remoto para Android TV */
+:focus-visible {
+  outline: 3px solid #e50914 !important;
+  outline-offset: 3px !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 25px rgba(229, 9, 20, 0.75) !important;
+  transform: scale(1.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Eliminar scrollbars molestas en Android TV / Web */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #dc2626;
 }

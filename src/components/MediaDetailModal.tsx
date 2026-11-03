@@ -47,7 +47,7 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
         onClose();
       }
     };

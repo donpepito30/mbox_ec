@@ -86,6 +86,41 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [selectedMediaType, searchQuery, loadContent]);
 
+  // Neutralizador Global de Pop-ups (Anti-Clickjacking / Ad Interceptor)
+  useEffect(() => {
+    const originalOpen = window.open;
+    window.open = function (url?: string | URL, target?: string, features?: string) {
+      console.warn('[Mbox_ec Shield] Ventana emergente no deseada bloqueada:', url);
+      return null;
+    };
+    return () => {
+      window.open = originalOpen;
+    };
+  }, []);
+
+  // Navegación con Control Remoto (D-pad & Teclado Android TV)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        if (e.key === 'Escape') {
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
+        if (selectedDetailItem) {
+          setSelectedDetailItem(null);
+        } else if (watchingItem) {
+          setWatchingItem(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDetailItem, watchingItem]);
+
   // Contenido destacado para el Hero Banner
   const featuredItem = useMemo(() => {
     if (items.length === 0) return null;
@@ -539,8 +574,15 @@ export default function App() {
                     return (
                       <article
                         key={item.id}
+                        tabIndex={0}
                         onClick={() => handleWatch(item)}
-                        className="group relative flex flex-col overflow-hidden rounded-xl border border-neutral-900 bg-neutral-950 transition-all duration-300 hover:-translate-y-1.5 hover:border-neutral-700 hover:shadow-2xl hover:shadow-black cursor-pointer"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleWatch(item);
+                          }
+                        }}
+                        className="group relative flex flex-col overflow-hidden rounded-xl border border-neutral-900 bg-neutral-950 transition-all duration-300 hover:-translate-y-1.5 hover:border-neutral-700 hover:shadow-2xl hover:shadow-black cursor-pointer focus:outline-none focus:ring-4 focus:ring-red-600 focus:scale-[1.03]"
                       >
                         {/* Póster de TMDb en Aspecto 2:3 */}
                         <div className="relative aspect-[2/3] w-full overflow-hidden bg-black">
