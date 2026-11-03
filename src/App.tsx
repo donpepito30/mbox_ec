@@ -1,5 +1,5 @@
 // Mbox_ec - Plataforma de Streaming de Películas y Series
-// Estilo Minimalista Netflix / Pluto TV en Negro, Rojo y Blanco
+// Estilo Minimalista Netflix / Pluto TV en Negro Obsidiana, Rojo y Blanco
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -13,19 +13,38 @@ import {
   ArrowLeft,
   Info,
   RefreshCw,
+  Bookmark,
+  BookmarkCheck,
+  User as UserIcon,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
 import { Player } from './components/Player.tsx';
+import { HeroBanner } from './components/HeroBanner.tsx';
+import { AuthModal } from './components/AuthModal.tsx';
 import { MediaDetailModal } from './components/MediaDetailModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
+import {
+  getCurrentUser,
+  logoutUser,
+  isInWatchlist,
+  toggleWatchlist,
+  User,
+} from './services/auth.ts';
 
 export default function App() {
   const [items, setItems] = useState<MediaItem[]>([]);
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaType>('all');
+  const [selectedMediaType, setSelectedMediaType] = useState<MediaType | 'watchlist'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Estado de Autenticación de Usuario
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [watchlistVersion, setWatchlistVersion] = useState<number>(0);
 
   // Estado de reproducción /watch/[id]
   const [watchingItem, setWatchingItem] = useState<MediaItem | null>(null);
@@ -33,6 +52,12 @@ export default function App() {
 
   // Modal de ficha y trailer
   const [selectedDetailItem, setSelectedDetailItem] = useState<MediaItem | null>(null);
+
+  // Sincronizar usuario activo
+  const refreshUserSession = useCallback(() => {
+    setCurrentUser(getCurrentUser());
+    setWatchlistVersion((prev) => prev + 1);
+  }, []);
 
   // Cargar detalles y trailer al reproducir
   useEffect(() => {
@@ -73,13 +98,15 @@ export default function App() {
 
   // Efecto de búsqueda con debounce
   useEffect(() => {
+    if (selectedMediaType === 'watchlist') return;
+
     if (!searchQuery.trim()) {
-      loadContent(selectedMediaType, '');
+      loadContent(selectedMediaType as MediaType, '');
       return;
     }
 
     const timer = setTimeout(() => {
-      loadContent(selectedMediaType, searchQuery);
+      loadContent(selectedMediaType as MediaType, searchQuery);
     }, 350);
 
     return () => clearTimeout(timer);
@@ -88,7 +115,7 @@ export default function App() {
   // Neutralizador Global de Pop-ups (Anti-Clickjacking / Ad Interceptor)
   useEffect(() => {
     const originalOpen = window.open;
-    window.open = function (url?: string | URL, target?: string, features?: string) {
+    window.open = function (url?: string | URL) {
       console.warn('[Mbox_ec Shield] Ventana emergente no deseada bloqueada:', url);
       return null;
     };
@@ -108,7 +135,9 @@ export default function App() {
       }
 
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
-        if (selectedDetailItem) {
+        if (isAuthModalOpen) {
+          setIsAuthModalOpen(false);
+        } else if (selectedDetailItem) {
           setSelectedDetailItem(null);
         } else if (watchingItem) {
           setWatchingItem(null);
@@ -118,19 +147,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedDetailItem, watchingItem]);
-
-  // Contenido destacado para el Hero Banner
-  const featuredItem = useMemo(() => {
-    if (items.length === 0) return null;
-    return items[0];
-  }, [items]);
-
-  // Catálogo restante
-  const catalogItems = useMemo(() => {
-    if (searchQuery.trim()) return items;
-    return items.slice(1);
-  }, [items, searchQuery]);
+  }, [selectedDetailItem, watchingItem, isAuthModalOpen]);
 
   // Iniciar reproducción
   const handleWatch = (item: MediaItem) => {
@@ -142,10 +159,45 @@ export default function App() {
     setWatchingItem(null);
   };
 
-  const featuredTitle = featuredItem?.title || featuredItem?.name || 'Producción Destacada';
-  const featuredYear = (featuredItem?.release_date || featuredItem?.first_air_date || '').split('-')[0] || '2024';
-  const featuredRating = Number(featuredItem?.vote_average || 0).toFixed(1);
-  const featuredBackdrop = getImageUrl(featuredItem?.backdrop_path || featuredItem?.poster_path, 'original');
+  // Manejo de Favoritos / Mi Lista
+  const handleToggleWatchlist = (item: MediaItem) => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    toggleWatchlist(item);
+    refreshUserSession();
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    refreshUserSession();
+    if (selectedMediaType === 'watchlist') {
+      setSelectedMediaType('all');
+    }
+  };
+
+  // Lista de pósteres para el mosaico del modal de autenticación
+  const moviePosterUrls = useMemo(() => {
+    return items
+      .filter((item) => Boolean(item.poster_path))
+      .map((item) => getImageUrl(item.poster_path, 'w500'));
+  }, [items]);
+
+  // Títulos para el catálogo según filtro activo
+  const displayedCatalogItems = useMemo(() => {
+    if (selectedMediaType === 'watchlist') {
+      const list = currentUser?.watchlist || [];
+      if (!searchQuery.trim()) return list;
+      const q = searchQuery.toLowerCase().trim();
+      return list.filter(
+        (i) =>
+          (i.title && i.title.toLowerCase().includes(q)) ||
+          (i.name && i.name.toLowerCase().includes(q))
+      );
+    }
+    return items;
+  }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, watchlistVersion]);
 
   return (
     <div 
@@ -157,7 +209,7 @@ export default function App() {
     >
       
       {/* 1. Header Minimalista Estilo Netflix / Pluto TV */}
-      <header className="sticky top-0 z-50 w-full border-b border-neutral-900 bg-black/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 w-full border-b border-neutral-900 bg-black/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           
           {/* Logo Mbox_ec */}
@@ -218,6 +270,61 @@ export default function App() {
               Series
             </button>
 
+            {/* Acceso a Mi Lista en Header */}
+            <button
+              onClick={() => {
+                setWatchingItem(null);
+                if (!currentUser) {
+                  setIsAuthModalOpen(true);
+                } else {
+                  setSelectedMediaType('watchlist');
+                }
+              }}
+              className={`transition cursor-pointer text-xs sm:text-sm flex items-center gap-1.5 ${
+                !watchingItem && selectedMediaType === 'watchlist'
+                  ? 'text-white font-bold'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Bookmark className="h-3.5 w-3.5 text-red-500" />
+              <span>Mi Lista</span>
+              {currentUser?.watchlist && currentUser.watchlist.length > 0 && (
+                <span className="ml-0.5 rounded-full bg-neutral-900 border border-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-neutral-300">
+                  {currentUser.watchlist.length}
+                </span>
+              )}
+            </button>
+
+            {/* Perfil de Usuario / Botón de Iniciar Sesión */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
+                <div
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
+                  title={currentUser.email}
+                >
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden md:inline text-xs text-neutral-300 font-semibold max-w-[90px] truncate">
+                  {currentUser.name}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-red-400 transition cursor-pointer"
+                  title="Cerrar Sesión"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-md shadow-red-950/70 hover:bg-red-500 transition cursor-pointer"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                <span>Iniciar Sesión</span>
+              </button>
+            )}
+
             {/* Botón PWA Install */}
             <PWAInstallButton />
           </nav>
@@ -231,7 +338,7 @@ export default function App() {
         {/* Vista A: Vista de Reproducción /watch/[id] */}
         {watchingItem ? (
           <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6 animate-in fade-in duration-200">
-            {/* Barra de Retorno */}
+            {/* Barra de Retorno y Favoritos */}
             <div className="flex items-center justify-between pb-3 border-b border-neutral-900">
               <button
                 onClick={handleBackToCatalog}
@@ -240,9 +347,30 @@ export default function App() {
                 <ArrowLeft className="h-4 w-4 text-red-500" />
                 <span>Volver al Catálogo</span>
               </button>
+
+              <button
+                onClick={() => handleToggleWatchlist(watchingItem)}
+                className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+                  isInWatchlist(watchingItem.id)
+                    ? 'bg-red-950/70 border-red-800 text-red-400'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-white'
+                }`}
+              >
+                {isInWatchlist(watchingItem.id) ? (
+                  <>
+                    <BookmarkCheck className="h-3.5 w-3.5" />
+                    <span>Guardado en Mi Lista</span>
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="h-3.5 w-3.5" />
+                    <span>Añadir a Mi Lista</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Reproductor Multi-Fuente (Smashy & VidSrc) */}
+            {/* Reproductor Limpio y Profesional (VidSrc Oficial) */}
             <Player
               tmdbId={watchingItem.id}
               imdbId={watchingDetails?.imdb_id || watchingItem.imdb_id}
@@ -366,87 +494,15 @@ export default function App() {
           /* Vista B: Catálogo Principal Estilo Netflix / Pluto TV */
           <div>
             
-            {/* Hero Banner Destacado */}
-            {!searchQuery.trim() && featuredItem && (
-              <section className="relative w-full overflow-hidden border-b border-neutral-900 bg-black">
-                {/* Backdrop oficial con degradado cinemático a negro */}
-                <div className="absolute inset-0 z-0">
-                  <img
-                    src={featuredBackdrop}
-                    alt={featuredTitle}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1280&auto=format&fit=crop&q=80';
-                    }}
-                    className="h-full w-full object-cover object-top opacity-45"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
-                </div>
-
-                <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:py-24">
-                  <div className="max-w-2xl space-y-4">
-                    
-                    {/* Metadatos superiores */}
-                    <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                      <span className="text-red-500 font-bold">
-                        Tendencia
-                      </span>
-                      <span aria-hidden="true" className="text-neutral-700">·</span>
-                      <span className="capitalize text-neutral-300">
-                        {featuredItem.media_type === 'tv' ? 'Serie' : 'Película'}
-                      </span>
-                      <span aria-hidden="true" className="text-neutral-700">·</span>
-                      <span className="font-mono text-neutral-300">{featuredYear}</span>
-                    </div>
-
-                    {/* Título Principal */}
-                    <h1 className="text-3xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl text-balance leading-none drop-shadow-md">
-                      {featuredTitle}
-                    </h1>
-
-                    {/* Calificación */}
-                    <div className="flex items-center gap-3 text-sm text-neutral-300">
-                      <span className="flex items-center gap-1 font-bold text-amber-400 font-mono tabular-nums">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        {featuredRating}
-                      </span>
-                      {featuredItem.vote_count && (
-                        <>
-                          <span aria-hidden="true" className="text-neutral-700">|</span>
-                          <span className="text-xs text-neutral-400 font-mono tabular-nums">
-                            {featuredItem.vote_count.toLocaleString()} votos
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Sinopsis */}
-                    <p className="line-clamp-3 text-sm sm:text-base leading-relaxed text-neutral-300 max-w-xl">
-                      {featuredItem.overview || 'Sinopsis completa disponible en la plataforma.'}
-                    </p>
-
-                    {/* Botones de acción */}
-                    <div className="flex flex-wrap items-center gap-3 pt-2">
-                      <button
-                        onClick={() => handleWatch(featuredItem)}
-                        className="inline-flex items-center gap-2.5 rounded-xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-red-950/70 hover:bg-red-500 transition-all cursor-pointer group"
-                      >
-                        <Play className="h-4 w-4 fill-white group-hover:scale-110 transition-transform" />
-                        <span>Ver Ahora</span>
-                      </button>
-
-                      <button
-                        onClick={() => setSelectedDetailItem(featuredItem)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/90 px-5 py-3 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 transition cursor-pointer"
-                      >
-                        <Info className="h-4 w-4 text-neutral-400" />
-                        <span>Más Información</span>
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-              </section>
+            {/* Hero Banner Interactivo con Portadas de Películas */}
+            {!searchQuery.trim() && selectedMediaType !== 'watchlist' && items.length > 0 && (
+              <HeroBanner
+                items={items}
+                onWatch={handleWatch}
+                onDetail={setSelectedDetailItem}
+                isItemInWatchlist={isInWatchlist}
+                onToggleWatchlist={handleToggleWatchlist}
+              />
             )}
 
             {/* Contenedor del Catálogo */}
@@ -456,7 +512,7 @@ export default function App() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-neutral-900">
                 
                 {/* Categorías */}
-                <div className="flex items-center gap-1 p-1 bg-neutral-950 border border-neutral-900 rounded-xl text-xs self-start">
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-neutral-950 border border-neutral-900 rounded-xl text-xs self-start">
                   <button
                     onClick={() => setSelectedMediaType('all')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
@@ -492,6 +548,24 @@ export default function App() {
                     <Tv className="h-3.5 w-3.5" />
                     <span>Series</span>
                   </button>
+
+                  <button
+                    onClick={() => {
+                      if (!currentUser) {
+                        setIsAuthModalOpen(true);
+                      } else {
+                        setSelectedMediaType('watchlist');
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                      selectedMediaType === 'watchlist'
+                        ? 'bg-red-600 text-white shadow-md shadow-red-950'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Bookmark className="h-3.5 w-3.5" />
+                    <span>Mi Lista</span>
+                  </button>
                 </div>
 
                 {/* Buscador Rápido */}
@@ -501,7 +575,11 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar películas o series..."
+                    placeholder={
+                      selectedMediaType === 'watchlist'
+                        ? 'Buscar en tu lista guardada...'
+                        : 'Buscar películas o series...'
+                    }
                     className="w-full rounded-xl border border-neutral-800 bg-neutral-950 pl-9 pr-8 py-2 text-xs text-white placeholder-neutral-500 focus:border-red-600 focus:outline-none transition"
                   />
                   {searchQuery && (
@@ -520,24 +598,35 @@ export default function App() {
               <div className="flex items-center justify-between pb-1">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                    {searchQuery.trim()
+                    {selectedMediaType === 'watchlist'
+                      ? 'Mi Lista Personal'
+                      : searchQuery.trim()
                       ? `Resultados para "${searchQuery}"`
                       : 'Estrenos y Series Populares'}
                   </h2>
+                  {selectedMediaType === 'watchlist' && (
+                    <p className="text-xs text-neutral-400 mt-1">
+                      {currentUser
+                        ? `Títulos guardados para ${currentUser.name}`
+                        : 'Inicia sesión para ver tu lista guardada'}
+                    </p>
+                  )}
                 </div>
 
-                <button
-                  onClick={() => loadContent(selectedMediaType, searchQuery)}
-                  disabled={isLoading}
-                  className="hidden sm:flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
-                >
-                  <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
-                  <span>Actualizar</span>
-                </button>
+                {selectedMediaType !== 'watchlist' && (
+                  <button
+                    onClick={() => loadContent(selectedMediaType as MediaType, searchQuery)}
+                    disabled={isLoading}
+                    className="hidden sm:flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
+                    <span>Actualizar</span>
+                  </button>
+                )}
               </div>
 
               {/* Catálogo en Grid Estilo Netflix / Pluto TV (2 cols mobile a 5 cols desktop) */}
-              {isLoading ? (
+              {isLoading && selectedMediaType !== 'watchlist' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
                   {Array.from({ length: 10 }).map((_, idx) => (
                     <div
@@ -546,20 +635,39 @@ export default function App() {
                     />
                   ))}
                 </div>
-              ) : catalogItems.length === 0 ? (
-                <div className="py-20 text-center text-neutral-500">
-                  <Film className="h-12 w-12 mx-auto mb-3 opacity-30 text-neutral-400" />
-                  <p className="text-sm font-semibold text-neutral-300">No se encontraron títulos disponibles</p>
-                  <p className="text-xs text-neutral-500 mt-1">Prueba con otra búsqueda o filtro</p>
+              ) : displayedCatalogItems.length === 0 ? (
+                <div className="py-20 text-center text-neutral-500 space-y-3">
+                  {selectedMediaType === 'watchlist' ? (
+                    <>
+                      <Bookmark className="h-12 w-12 mx-auto opacity-30 text-red-500" />
+                      <p className="text-sm font-semibold text-neutral-300">Tu lista está vacía</p>
+                      <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                        Explora el catálogo y pulsa el botón de guardar en cualquier película o serie para tenerla a mano.
+                      </p>
+                      <button
+                        onClick={() => setSelectedMediaType('all')}
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500 transition cursor-pointer"
+                      >
+                        Explorar Catálogo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Film className="h-12 w-12 mx-auto opacity-30 text-neutral-400" />
+                      <p className="text-sm font-semibold text-neutral-300">No se encontraron títulos disponibles</p>
+                      <p className="text-xs text-neutral-500">Prueba con otra búsqueda o filtro</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
-                  {catalogItems.map((item) => {
+                  {displayedCatalogItems.map((item) => {
                     const title = item.title || item.name || 'Título';
                     const year = (item.release_date || item.first_air_date || '').split('-')[0] || '—';
                     const rating = Number(item.vote_average || 0).toFixed(1);
                     const isTv = item.media_type === 'tv' || (!item.title && Boolean(item.name));
                     const posterUrl = getImageUrl(item.poster_path, 'w500');
+                    const saved = isInWatchlist(item.id);
 
                     return (
                       <article
@@ -595,8 +703,30 @@ export default function App() {
                             <span>{rating}</span>
                           </div>
 
+                          {/* Botón de guardar rápido en la esquina superior izquierda */}
+                          <button
+                            type="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleWatchlist(item);
+                            }}
+                            className={`absolute top-2.5 left-2.5 p-1.5 rounded-lg border backdrop-blur-md transition cursor-pointer ${
+                              saved
+                                ? 'bg-red-600/90 border-red-500 text-white'
+                                : 'bg-black/70 border-neutral-800 text-neutral-300 hover:text-white opacity-0 group-hover:opacity-100'
+                            }`}
+                            title={saved ? 'En Mi Lista' : 'Guardar en Mi Lista'}
+                          >
+                            {saved ? (
+                              <BookmarkCheck className="h-3.5 w-3.5" />
+                            ) : (
+                              <Bookmark className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+
                           {/* Botón flotante de reproducción en hover estilo Netflix */}
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px]">
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px] pointer-events-none">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-xl shadow-red-950 scale-90 group-hover:scale-100 transition-transform">
                               <Play className="h-5 w-5 fill-white ml-0.5" />
                             </div>
@@ -628,6 +758,17 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Modal de Autenticación y Registro por Correo (Mosaico Cinemático de Portadas) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          refreshUserSession();
+        }}
+        moviePosters={moviePosterUrls}
+      />
 
       {/* Modal de Ficha Técnica */}
       {selectedDetailItem && (

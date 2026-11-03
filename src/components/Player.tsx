@@ -1,5 +1,5 @@
-// Mbox_ec - Reproductor Minimalista (SmashyStream & VidSrc)
-// Estilo Puro Netflix / Pluto TV: Cero etiquetas descriptivas, interfaz limpia y modo cine
+// Mbox_ec - Reproductor Minimalista de Alto Rendimiento (VidSrc Oficial)
+// Estilo Puro Netflix / Pluto TV: Cero etiquetas de servidores, cero selectores de aspecto, interfaz ultra limpia
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -10,17 +10,14 @@ import {
   Maximize,
   Minimize,
   Play,
+  ArrowLeft,
   X,
-  Smartphone,
-  Tv,
 } from 'lucide-react';
-
-export type StreamingSource = 'smashy' | 'vidsrc';
 
 export interface PlayerProps {
   /** Identificador de TMDb */
   tmdbId: number | string;
-  /** Identificador de IMDb (opcional) */
+  /** Identificador de IMDb (opcional, ej. tt17048514) */
   imdbId?: string;
   /** Tipo de contenido: movie o tv */
   type: 'movie' | 'tv';
@@ -32,7 +29,7 @@ export interface PlayerProps {
   title?: string;
   /** Imagen de fondo para la portada de carga */
   backdropUrl?: string;
-  /** Callback para cerrar el reproductor en modal o vista */
+  /** Callback para cerrar el reproductor */
   onClose?: () => void;
 }
 
@@ -49,26 +46,22 @@ export const Player: React.FC<PlayerProps> = ({
   const [currentSeason, setCurrentSeason] = useState<number>(season);
   const [currentEpisode, setCurrentEpisode] = useState<number>(episode);
 
-  // Fuente activa: 'smashy' o 'vidsrc'
-  const [source, setSource] = useState<StreamingSource>('smashy');
-
   const [iframeKey, setIframeKey] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showPlayOverlay, setShowPlayOverlay] = useState<boolean>(true);
   const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
 
-  // Escudo silencioso de absorción de clics fantasma
+  // Escudo silencioso invisible para absorber el primer clic sin mostrar avisos publicitarios
   const [shieldActive, setShieldActive] = useState<boolean>(true);
 
-  // Selector de aspecto: 16:9 u 9:16
-  const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+  // Estado de Pantalla Completa (compatible con Smart TV y navegadores móviles / iOS Safari)
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const timeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
-   * Neutralizador global de popups en contexto padre
+   * Neutralizador global de popups y nuevas pestañas maliciosas
    */
   useEffect(() => {
     const originalOpen = window.open;
@@ -81,25 +74,20 @@ export const Player: React.FC<PlayerProps> = ({
   }, []);
 
   /**
-   * Genera la URL del reproductor según la fuente seleccionada (Smashy o VidSrc)
-   * Respeta la documentación oficial de VidSrc (https://vidsrc.to/embed/movie/{id} y /tv/{id}/{s}/{e})
+   * Generación de la URL según la documentación oficial de VidSrc:
+   * Películas: https://vidsrc.to/embed/movie/{id} (acepta TMDb o IMDb tt...)
+   * Series: https://vidsrc.to/embed/tv/{id}/{season}/{episode}
    */
   const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
+    const identifier = imdbId || tmdbId;
 
-    if (source === 'vidsrc') {
-      const identifier = imdbId || tmdbId;
-      return type === 'tv'
-        ? `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`
-        : `https://vidsrc.to/embed/movie/${identifier}`;
+    if (type === 'tv') {
+      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`;
     }
-
-    // Fuente SmashyStream
-    return type === 'tv'
-      ? `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&season=${s}&episode=${e}`
-      : `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}`;
-  }, [source, type, tmdbId, imdbId, currentSeason, currentEpisode]);
+    return `https://vidsrc.to/embed/movie/${identifier}`;
+  }, [type, tmdbId, imdbId, currentSeason, currentEpisode]);
 
   const streamUrl = getStreamUrl();
 
@@ -118,7 +106,7 @@ export const Player: React.FC<PlayerProps> = ({
     timeoutTimerRef.current = setTimeout(() => {
       setIsLoading(false);
       setHasTimedOut(true);
-    }, 8000);
+    }, 7000);
   }, [clearTimer]);
 
   useEffect(() => {
@@ -128,9 +116,9 @@ export const Player: React.FC<PlayerProps> = ({
     setShieldActive(true);
     setIframeKey((prev) => prev + 1);
     startTimer();
-  }, [tmdbId, imdbId, type, season, episode, source, startTimer]);
+  }, [tmdbId, imdbId, type, season, episode, startTimer]);
 
-  // Listener para estado Fullscreen nativo
+  // Sincronizar eventos nativos de fullscreen (Smart TV, Chrome, Firefox)
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = Boolean(
@@ -148,7 +136,56 @@ export const Player: React.FC<PlayerProps> = ({
     };
   }, []);
 
-  // Navegación D-pad / Control Remoto TV
+  /**
+   * Alternar pantalla completa con soporte dual:
+   * 1. Fullscreen API nativo (Smart TVs y PCs de escritorio)
+   * 2. Modo pseudo-fullscreen CSS de pantalla completa para móviles (iOS Safari / Android WebView)
+   */
+  const handleToggleFullscreen = async () => {
+    if (!playerContainerRef.current) return;
+
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        // Intento de Fullscreen API
+        if (playerContainerRef.current.requestFullscreen) {
+          await playerContainerRef.current.requestFullscreen();
+        } else if ((playerContainerRef.current as any).webkitRequestFullscreen) {
+          await (playerContainerRef.current as any).webkitRequestFullscreen();
+        } else {
+          // Fallback para dispositivos móviles sin Fullscreen API estándar
+          setIsFullscreen(true);
+        }
+
+        // Si es dispositivo móvil, intentar bloquear orientación horizontal para mayor inmersión
+        if (typeof screen !== 'undefined' && screen.orientation && 'lock' in screen.orientation) {
+          try {
+            await (screen.orientation as any).lock('landscape');
+          } catch {
+            // Ignorar si el navegador no permite bloqueo de orientación
+          }
+        }
+      } else {
+        // Salir de pantalla completa
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        }
+        setIsFullscreen(false);
+
+        if (typeof screen !== 'undefined' && screen.orientation && 'unlock' in screen.orientation) {
+          try {
+            (screen.orientation as any).unlock();
+          } catch {}
+        }
+      }
+    } catch {
+      // Si la API nativa falla (por ejemplo en iframe o política de permisos móviles), alternamos CSS fullscreen
+      setIsFullscreen((prev) => !prev);
+    }
+  };
+
+  // Navegación con Control Remoto / D-pad de Smart TV y accesos de teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
@@ -160,6 +197,7 @@ export const Player: React.FC<PlayerProps> = ({
         case 'Backspace':
         case 'GoBack':
           if (isFullscreen) {
+            e.preventDefault();
             handleToggleFullscreen();
           } else if (onClose) {
             onClose();
@@ -170,18 +208,6 @@ export const Player: React.FC<PlayerProps> = ({
         case 'F':
           e.preventDefault();
           handleToggleFullscreen();
-          break;
-
-        case 'a':
-        case 'A':
-          e.preventDefault();
-          handleToggleAspectRatio();
-          break;
-
-        case 's':
-        case 'S':
-          e.preventDefault();
-          setSource((prev) => (prev === 'smashy' ? 'vidsrc' : 'smashy'));
           break;
 
         case 'r':
@@ -198,59 +224,6 @@ export const Player: React.FC<PlayerProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen, onClose]);
-
-  const handleToggleFullscreen = async () => {
-    if (!playerContainerRef.current) return;
-
-    try {
-      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        if (playerContainerRef.current.requestFullscreen) {
-          await playerContainerRef.current.requestFullscreen();
-        } else if ((playerContainerRef.current as any).webkitRequestFullscreen) {
-          await (playerContainerRef.current as any).webkitRequestFullscreen();
-        }
-
-        if (typeof screen !== 'undefined' && screen.orientation && 'lock' in screen.orientation) {
-          try {
-            if (aspectRatio === '9:16') {
-              await (screen.orientation as any).lock('portrait');
-            } else {
-              await (screen.orientation as any).lock('landscape');
-            }
-          } catch {}
-        }
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        }
-
-        if (typeof screen !== 'undefined' && screen.orientation && 'unlock' in screen.orientation) {
-          try {
-            (screen.orientation as any).unlock();
-          } catch {}
-        }
-      }
-    } catch (err) {
-      console.warn('Error en pantalla completa:', err);
-    }
-  };
-
-  const handleToggleAspectRatio = () => {
-    const nextRatio = aspectRatio === '16:9' ? '9:16' : '16:9';
-    setAspectRatio(nextRatio);
-
-    if (isFullscreen && typeof screen !== 'undefined' && screen.orientation && 'lock' in screen.orientation) {
-      try {
-        if (nextRatio === '9:16') {
-          (screen.orientation as any).lock('portrait').catch(() => {});
-        } else {
-          (screen.orientation as any).lock('landscape').catch(() => {});
-        }
-      } catch {}
-    }
-  };
 
   const handleSeasonChange = (newSeason: number) => {
     if (newSeason >= 1 && newSeason !== currentSeason) {
@@ -288,7 +261,7 @@ export const Player: React.FC<PlayerProps> = ({
     setShowPlayOverlay(false);
   };
 
-  // Absorbe silenciosamente el primer clic publicitario sin mostrar textos
+  // Absorbe silenciosamente el primer clic de interacción
   const handleAbsorbClick = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -307,84 +280,52 @@ export const Player: React.FC<PlayerProps> = ({
       {/* Contenedor del Reproductor Estilo Netflix / Pluto TV */}
       <div
         ref={playerContainerRef}
-        className={`relative overflow-hidden rounded-2xl border border-neutral-900 bg-black shadow-2xl flex flex-col transition-all duration-300 ${
-          isFullscreen ? 'h-screen w-screen rounded-none border-0 p-0 m-0 bg-black flex flex-col justify-between' : ''
+        className={`relative overflow-hidden bg-black shadow-2xl flex flex-col transition-all duration-300 ${
+          isFullscreen
+            ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen rounded-none border-0 p-0 m-0 bg-black flex flex-col justify-between'
+            : 'rounded-2xl border border-neutral-900'
         }`}
       >
         
-        {/* Barra Superior Minimalista */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-neutral-900/90 to-black/95 border-b border-neutral-900 z-30">
+        {/* Barra Superior Minimalista (Sin nombres de servidores, sin aspecto) */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-neutral-900/90 to-black/95 border-b border-neutral-900/80 z-30">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse shrink-0" />
-            <h2 className="text-sm sm:text-base font-black text-white truncate tracking-tight">
+            {onClose && (
+              <button
+                type="button"
+                tabIndex={0}
+                onClick={onClose}
+                className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
+                title="Volver"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0" />
+            <h2 className="text-xs sm:text-sm md:text-base font-bold text-white truncate tracking-tight">
               {title || (type === 'tv' ? 'Serie' : 'Película')}
             </h2>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Selector de Fuente Limpio: Smashy o VidSrc */}
-            <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 text-xs">
-              <button
-                type="button"
-                tabIndex={0}
-                onClick={() => setSource('smashy')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
-                  source === 'smashy'
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Fuente Smashy"
-              >
-                Smashy
-              </button>
-              <button
-                type="button"
-                tabIndex={0}
-                onClick={() => setSource('vidsrc')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
-                  source === 'vidsrc'
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Fuente VidSrc"
-              >
-                VidSrc
-              </button>
-            </div>
-
-            {/* Selector de Formato 16:9 / 9:16 */}
-            <button
-              type="button"
-              tabIndex={0}
-              onClick={handleToggleAspectRatio}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 border border-neutral-800 text-xs font-semibold transition cursor-pointer"
-              title="Alternar 16:9 u 9:16"
-            >
-              {aspectRatio === '16:9' ? (
-                <>
-                  <Tv className="h-3.5 w-3.5 text-red-500" />
-                  <span className="font-mono text-[11px]">16:9</span>
-                </>
-              ) : (
-                <>
-                  <Smartphone className="h-3.5 w-3.5 text-red-500" />
-                  <span className="font-mono text-[11px]">9:16</span>
-                </>
-              )}
-            </button>
-
-            {/* Botón de Pantalla Completa */}
+            {/* Botón de Pantalla Completa (Optimizado para móvil y Smart TV) */}
             <button
               type="button"
               tabIndex={0}
               onClick={handleToggleFullscreen}
-              className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
-              title="Pantalla Completa"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer text-xs font-medium"
+              title={isFullscreen ? 'Salir de Pantalla Completa' : 'Pantalla Completa'}
             >
               {isFullscreen ? (
-                <Minimize className="h-4 w-4 text-red-500" />
+                <>
+                  <Minimize className="h-4 w-4 text-red-500" />
+                  <span className="hidden sm:inline">Salir</span>
+                </>
               ) : (
-                <Maximize className="h-4 w-4 text-red-500" />
+                <>
+                  <Maximize className="h-4 w-4 text-red-500" />
+                  <span className="hidden sm:inline">Pantalla Completa</span>
+                </>
               )}
             </button>
 
@@ -394,18 +335,18 @@ export const Player: React.FC<PlayerProps> = ({
               tabIndex={0}
               onClick={handleReload}
               className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
-              title="Recargar"
+              title="Recargar reproductor"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
             </button>
 
-            {onClose && (
+            {isFullscreen && (
               <button
                 type="button"
                 tabIndex={0}
-                onClick={onClose}
-                className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-400 hover:text-red-500 border border-neutral-800 transition cursor-pointer"
-                title="Cerrar"
+                onClick={handleToggleFullscreen}
+                className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800 transition cursor-pointer"
+                title="Cerrar pantalla completa"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -413,11 +354,11 @@ export const Player: React.FC<PlayerProps> = ({
           </div>
         </div>
 
-        {/* Controles de Temporada y Episodio para Series */}
+        {/* Controles Limpios de Temporada y Episodio para Series */}
         {type === 'tv' && (
           <div className="flex items-center justify-between px-4 py-2 bg-neutral-950 border-b border-neutral-900 text-xs z-20">
             <div className="flex items-center gap-4">
-              {/* Temporada */}
+              {/* Selector de Temporada */}
               <div className="flex items-center gap-1.5">
                 <span className="text-neutral-400">Temporada</span>
                 <button
@@ -426,6 +367,7 @@ export const Player: React.FC<PlayerProps> = ({
                   disabled={currentSeason <= 1}
                   onClick={() => handleSeasonChange(currentSeason - 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 disabled:opacity-20 text-white transition cursor-pointer"
+                  title="Temporada anterior"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
@@ -437,12 +379,13 @@ export const Player: React.FC<PlayerProps> = ({
                   tabIndex={0}
                   onClick={() => handleSeasonChange(currentSeason + 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 text-white transition cursor-pointer"
+                  title="Siguiente temporada"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* Episodio */}
+              {/* Selector de Episodio */}
               <div className="flex items-center gap-1.5">
                 <span className="text-neutral-400">Episodio</span>
                 <button
@@ -451,6 +394,7 @@ export const Player: React.FC<PlayerProps> = ({
                   disabled={currentEpisode <= 1}
                   onClick={() => handleEpisodeChange(currentEpisode - 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 disabled:opacity-20 text-white transition cursor-pointer"
+                  title="Episodio anterior"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
@@ -462,44 +406,37 @@ export const Player: React.FC<PlayerProps> = ({
                   tabIndex={0}
                   onClick={() => handleEpisodeChange(currentEpisode + 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 text-white transition cursor-pointer"
+                  title="Siguiente episodio"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            <span className="text-neutral-500 font-mono text-[11px]">
+            <span className="text-neutral-500 font-mono text-[11px] tracking-wider">
               T{currentSeason}:E{currentEpisode}
             </span>
           </div>
         )}
 
-        {/* Viewport del Video Adaptable a 16:9 y 9:16 */}
+        {/* Viewport del Video */}
         <div
           className={`relative w-full bg-black overflow-hidden flex items-center justify-center flex-1 transition-all duration-300 ${
             isFullscreen
               ? 'h-full flex-1'
-              : aspectRatio === '9:16'
-              ? 'aspect-[9/16] max-w-sm sm:max-w-md mx-auto min-h-[460px] sm:min-h-[580px]'
-              : 'aspect-video min-h-[260px] sm:min-h-[400px]'
+              : 'aspect-video min-h-[260px] sm:min-h-[400px] md:min-h-[480px] lg:min-h-[560px]'
           }`}
         >
-          {/* Contenedor interno */}
-          <div
-            className={`relative w-full h-full flex items-center justify-center ${
-              isFullscreen && aspectRatio === '9:16'
-                ? 'aspect-[9/16] max-h-screen mx-auto'
-                : 'w-full h-full'
-            }`}
-          >
-            {/* Indicador de Carga */}
+          <div className="relative w-full h-full flex items-center justify-center">
+            
+            {/* Indicador de Carga Minimalista */}
             {isLoading && !hasTimedOut && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/85 backdrop-blur-xs text-white space-y-3 pointer-events-none">
                 <div className="h-10 w-10 rounded-full border-3 border-red-600 border-t-transparent animate-spin" />
               </div>
             )}
 
-            {/* Aviso de Recarga */}
+            {/* Aviso de Recarga si tarda demasiado */}
             {hasTimedOut && (
               <div className="absolute top-3 right-3 z-30 flex items-center gap-2 p-2 rounded-xl bg-neutral-950/90 border border-neutral-800 text-xs text-neutral-300 shadow-xl backdrop-blur-sm">
                 <button
@@ -513,7 +450,7 @@ export const Player: React.FC<PlayerProps> = ({
               </div>
             )}
 
-            {/* Capa "Toca para Reproducir" */}
+            {/* Portada Inicial "Toca para Reproducir" */}
             {showPlayOverlay && (
               <div 
                 tabIndex={0}
@@ -546,7 +483,7 @@ export const Player: React.FC<PlayerProps> = ({
               </div>
             )}
 
-            {/* Capa Silenciosa de Absorción de Clickjacking (sin textos visuales) */}
+            {/* Capa Silenciosa de Absorción de Clickjacking (Cero textos, absorbe clics fantasma) */}
             {!showPlayOverlay && shieldActive && (
               <div
                 tabIndex={0}
@@ -561,7 +498,7 @@ export const Player: React.FC<PlayerProps> = ({
               />
             )}
 
-            {/* Iframe del Reproductor */}
+            {/* Iframe del Reproductor VidSrc Oficial */}
             <iframe
               key={iframeKey}
               src={streamUrl}
