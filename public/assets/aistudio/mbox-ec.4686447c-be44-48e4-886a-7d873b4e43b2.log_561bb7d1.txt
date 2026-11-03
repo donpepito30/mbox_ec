@@ -1,0 +1,91 @@
+2026-11-01T18:34:18.046500Z	Cloning repository...
+2026-11-01T18:34:18.727644Z	From https://github.com/donpepito30/mbox_ec
+2026-11-01T18:34:18.728020Z	 * branch            d1e5d67b722473ecee445e6e565aee914b7c0904 -> FETCH_HEAD
+2026-11-01T18:34:18.728154Z	
+2026-11-01T18:34:18.750643Z	HEAD is now at d1e5d67 feat: initialize Mbox_ec streaming platform
+2026-11-01T18:34:18.751013Z	
+2026-11-01T18:34:18.801807Z	
+2026-11-01T18:34:18.802315Z	Using v2 root directory strategy
+2026-11-01T18:34:18.818734Z	Success: Finished cloning repository files
+2026-11-01T18:34:20.545595Z	Checking for configuration in a Wrangler configuration file (BETA)
+2026-11-01T18:34:32.982256Z	npm error ERESOLVE could not resolve
+2026-11-01T18:34:32.982352Z	npm error
+2026-11-01T18:34:32.982433Z	npm error While resolving: vite@8.3.5
+2026-11-01T18:34:32.982489Z	npm error Found: esbuild@0.25.12
+2026-11-01T18:34:32.982528Z	npm error node_modules/esbuild
+2026-11-01T18:34:32.982574Z	npm error   dev esbuild@"^0.25.0" from the root project
+2026-11-01T18:34:32.982612Z	npm error
+2026-11-01T18:34:32.982682Z	npm error Could not resolve dependency:
+2026-11-01T18:34:32.982732Z	npm error peerOptional esbuild@"^0.27.0 || ^0.28.0" from vite@8.3.5
+2026-11-01T18:34:32.982814Z	npm error node_modules/vite
+2026-11-01T18:34:32.982902Z	npm error   vite@"^8.3.0" from the root project
+2026-11-01T18:34:32.982978Z	npm error   peer vite@"^5.2.0 || ^6 || ^7 || ^8" from @tailwindcss/vite@4.3.3
+2026-11-01T18:34:32.983042Z	npm error   node_modules/@tailwindcss/vite
+2026-11-01T18:34:32.983100Z	npm error     @tailwindcss/vite@"^4.3.3" from the root project
+2026-11-01T18:34:32.983170Z	npm error   1 more (@vitejs/plugin-react)
+2026-11-01T18:34:32.983233Z	npm error
+2026-11-01T18:34:32.983271Z	npm error Conflicting peer dependency: esbuild@0.28.2
+2026-11-01T18:34:32.983326Z	npm error node_modules/esbuild
+2026-11-01T18:34:32.983371Z	npm error   peerOptional esbuild@"^0.27.0 || ^0.28.0" from vite@8.3.5
+2026-11-01T18:34:32.983408Z	npm error   node_modules/vite
+2026-11-01T18:34:32.983458Z	npm error     vite@"^8.3.0" from the root project
+2026-11-01T18:34:32.983525Z	npm error     peer vite@"^5.2.0 || ^6 || ^7 || ^8" from @tailwindcss/vite@4.3.3
+2026-11-01T18:34:32.983566Z	npm error     node_modules/@tailwindcss/vite
+2026-11-01T18:34:32.983605Z	npm error       @tailwindcss/vite@"^4.3.3" from the root project
+2026-11-01T18:34:32.983686Z	npm error     1 more (@vitejs/plugin-react)
+2026-11-01T18:34:32.983728Z	npm error
+2026-11-01T18:34:32.983790Z	npm error Fix the upstream dependency conflict, or retry
+2026-11-01T18:34:32.983840Z	npm error this command with --force or --legacy-peer-deps
+2026-11-01T18:34:32.983879Z	npm error to accept an incorrect (and potentially broken) dependency resolution.
+2026-11-01T18:34:32.983912Z	npm error
+2026-11-01T18:34:32.983944Z	npm error
+2026-11-01T18:34:32.983986Z	npm error For a full report see:
+2026-11-01T18:34:32.984043Z	npm error /opt/buildhome/.npm/_logs/2026-11-01T18_34_21_924Z-eresolve-report.txt
+2026-11-01T18:34:32.984103Z	npm error A complete log of this run can be found in: /opt/buildhome/.npm/_logs/2026-11-01T18_34_21_924Z-debug-0.log
+2026-11-01T18:34:33.038909Z	Error: Exit with error code: 1
+2026-11-01T18:34:33.039168Z	    at ChildProcess.<anonymous> (/snapshot/dist/run-build.js)
+2026-11-01T18:34:33.039227Z	    at Object.onceWrapper (node:events:652:26)
+2026-11-01T18:34:33.039269Z	    at ChildProcess.emit (node:events:537:28)
+2026-11-01T18:34:33.039309Z	    at ChildProcess._handle.onexit (node:internal/child_process:291:12)
+2026-11-01T18:34:33.044475Z	Failed: build command exited with code: 1
+2026-11-01T18:34:32.982256Z	npm error ERESOLVE could not resolve
+2026-11-01T18:34:32.982352Z	npm error
+2026-11-01T18:34:32.982433Z	npm error While resolving: vite@8.3.5
+2026-11-01T18:34:32.982489Z	npm error Found: esbuild@0.25.12
+2026-11-01T18:34:32.982528Z	npm error node_modules/esbuild
+2026-11-01T18:34:32.982574Z	npm error   dev esbuild@"^0.25.0" from the root project
+2026-11-01T18:34:32.982612Z	npm error
+2026-11-01T18:34:32.982682Z	npm error Could not resolve dependency:
+2026-11-01T18:34:32.982732Z	npm error peerOptional esbuild@"^0.27.0 || ^0.28.0" from vite@8.3.5
+2026-11-01T18:34:32.982814Z	npm error node_modules/vite
+2026-11-01T18:34:32.982902Z	npm error   vite@"^8.3.0" from the root project
+2026-11-01T18:34:32.982978Z	npm error   peer vite@"^5.2.0 || ^6 || ^7 || ^8" from @tailwindcss/vite@4.3.3
+2026-11-01T18:34:32.983042Z	npm error   node_modules/@tailwindcss/vite
+2026-11-01T18:34:32.983100Z	npm error     @tailwindcss/vite@"^4.3.3" from the root project
+2026-11-01T18:34:32.983170Z	npm error   1 more (@vitejs/plugin-react)
+2026-11-01T18:34:32.983233Z	npm error
+2026-11-01T18:34:32.983271Z	npm error Conflicting peer dependency: esbuild@0.28.2
+2026-11-01T18:34:32.983326Z	npm error node_modules/esbuild
+2026-11-01T18:34:32.983371Z	npm error   peerOptional esbuild@"^0.27.0 || ^0.28.0" from vite@8.3.5
+2026-11-01T18:34:32.983408Z	npm error   node_modules/vite
+2026-11-01T18:34:32.983458Z	npm error     vite@"^8.3.0" from the root project
+2026-11-01T18:34:32.983525Z	npm error     peer vite@"^5.2.0 || ^6 || ^7 || ^8" from @tailwindcss/vite@4.3.3
+2026-11-01T18:34:32.983566Z	npm error     node_modules/@tailwindcss/vite
+2026-11-01T18:34:32.983605Z	npm error       @tailwindcss/vite@"^4.3.3" from the root project
+2026-11-01T18:34:32.983686Z	npm error     1 more (@vitejs/plugin-react)
+2026-11-01T18:34:32.983728Z	npm error
+2026-11-01T18:34:32.983790Z	npm error Fix the upstream dependency conflict, or retry
+2026-11-01T18:34:32.983840Z	npm error this command with --force or --legacy-peer-deps
+2026-11-01T18:34:32.983879Z	npm error to accept an incorrect (and potentially broken) dependency resolution.
+2026-11-01T18:34:32.983912Z	npm error
+2026-11-01T18:34:32.983944Z	npm error
+2026-11-01T18:34:32.983986Z	npm error For a full report see:
+2026-11-01T18:34:32.984043Z	npm error /opt/buildhome/.npm/_logs/2026-11-01T18_34_21_924Z-eresolve-report.txt
+2026-11-01T18:34:32.984103Z	npm error A complete log of this run can be found in: /opt/buildhome/.npm/_logs/2026-11-01T18_34_21_924Z-debug-0.log
+2026-11-01T18:34:33.038909Z	Error: Exit with error code: 1
+2026-11-01T18:34:33.039168Z	    at ChildProcess.<anonymous> (/snapshot/dist/run-build.js)
+2026-11-01T18:34:33.039227Z	    at Object.onceWrapper (node:events:652:26)
+2026-11-01T18:34:33.039269Z	    at ChildProcess.emit (node:events:537:28)
+2026-11-01T18:34:33.039309Z	    at ChildProcess._handle.onexit (node:internal/child_process:291:12)
+2026-11-01T18:34:33.044475Z	Failed: build command exited with code: 1
+2026-11-01T18:34:33.810878Z	Failed: error occurred while running build command
