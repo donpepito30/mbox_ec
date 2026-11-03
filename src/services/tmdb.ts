@@ -203,9 +203,8 @@ export async function getMediaDetails(
   const endpoint = `/${type}/${id}`;
   
   const params: Record<string, string> = {};
-  if (appendToResponse) {
-    params.append_to_response = appendToResponse;
-  }
+  const appendItems = appendToResponse ? (appendToResponse.includes('external_ids') ? appendToResponse : `${appendToResponse},external_ids`) : 'videos,external_ids';
+  params.append_to_response = appendItems;
 
   let details = await tmdbFetch<MediaDetails>(
     endpoint,
@@ -231,8 +230,11 @@ export async function getMediaDetails(
     }
   }
 
+  const resolvedImdbId = details.imdb_id || (details as any).external_ids?.imdb_id;
+
   return {
     ...details,
+    imdb_id: resolvedImdbId,
     media_type: type,
   };
 }

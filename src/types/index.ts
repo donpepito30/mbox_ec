@@ -54,6 +54,8 @@ export interface MediaItem {
   popularity?: number;
   /** Idioma original */
   original_language?: string;
+  /** Identificador opcional de IMDb */
+  imdb_id?: string;
   /** Indicador de contenido para adultos */
   adult?: boolean;
 }

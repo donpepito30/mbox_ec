@@ -1,5 +1,5 @@
-// Mbox_ec - Reproductor SmashyStream con Arquitectura Anti-Publicidad y Soporte Android TV (D-pad)
-// Implementa: Capa de Absorción (Overlay Shield), Intercepción de Pop-ups y Control Remoto D-pad
+// Mbox_ec - Reproductor Minimalista (SmashyStream & VidSrc)
+// Estilo Puro Netflix / Pluto TV: Cero etiquetas descriptivas, interfaz limpia y modo cine
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -13,17 +13,15 @@ import {
   X,
   Smartphone,
   Tv,
-  Volume2,
-  Headphones,
-  SlidersHorizontal,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
 } from 'lucide-react';
+
+export type StreamingSource = 'smashy' | 'vidsrc';
 
 export interface PlayerProps {
   /** Identificador de TMDb */
   tmdbId: number | string;
+  /** Identificador de IMDb (opcional) */
+  imdbId?: string;
   /** Tipo de contenido: movie o tv */
   type: 'movie' | 'tv';
   /** Número de temporada para series */
@@ -40,6 +38,7 @@ export interface PlayerProps {
 
 export const Player: React.FC<PlayerProps> = ({
   tmdbId,
+  imdbId,
   type,
   season = 1,
   episode = 1,
@@ -50,67 +49,59 @@ export const Player: React.FC<PlayerProps> = ({
   const [currentSeason, setCurrentSeason] = useState<number>(season);
   const [currentEpisode, setCurrentEpisode] = useState<number>(episode);
 
+  // Fuente activa: 'smashy' o 'vidsrc'
+  const [source, setSource] = useState<StreamingSource>('smashy');
+
   const [iframeKey, setIframeKey] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showPlayOverlay, setShowPlayOverlay] = useState<boolean>(true);
   const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
 
-  // Escudo Anti-Publicidad y Capa de Absorción (Overlay Hack)
-  // Absorbe el primer clic fantasma/publicitario de Smashy sin romper el iframe
+  // Escudo silencioso de absorción de clics fantasma
   const [shieldActive, setShieldActive] = useState<boolean>(true);
-  const [absorbedClicksCount, setAbsorbedClicksCount] = useState<number>(0);
 
-  // Selector de aspecto: 16:9 (horizontal estándar) o 9:16 (vertical para móvil/pantalla completa)
+  // Selector de aspecto: 16:9 u 9:16
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-
-  // Configuración de Audio en Español
-  const [audioPreference, setAudioPreference] = useState<'latino' | 'castellano'>('latino');
-  const [serverEngine, setServerEngine] = useState<'smashy1' | 'smashy2'>('smashy1');
-  const [showAudioHelp, setShowAudioHelp] = useState<boolean>(false);
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const timeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
-   * 1. Intercepción Global de Ventanas Emergentes (Pop-up Neutralizer)
-   * Bloquea window.open a nivel del contexto de la aplicación para neutralizar redirecciones
+   * Neutralizador global de popups en contexto padre
    */
   useEffect(() => {
     const originalOpen = window.open;
-    // Anulación segura de window.open para absorber llamadas de scripts de publicidad
-    window.open = function (url?: string | URL, target?: string, features?: string) {
-      console.warn('[Mbox_ec Shield] Pop-up bloqueado exitosamente:', url);
-      setAbsorbedClicksCount((prev) => prev + 1);
+    window.open = function () {
       return null;
     };
-
     return () => {
       window.open = originalOpen;
     };
   }, []);
 
   /**
-   * Genera la URL optimizada para SmashyStream con parámetros prioritarios en Español
+   * Genera la URL del reproductor según la fuente seleccionada (Smashy o VidSrc)
+   * Respeta la documentación oficial de VidSrc (https://vidsrc.to/embed/movie/{id} y /tv/{id}/{s}/{e})
    */
-  const getSmashyUrl = useCallback((): string => {
+  const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
-    const langCode = audioPreference === 'castellano' ? 'es-ES' : 'es-MX';
 
-    if (serverEngine === 'smashy2') {
+    if (source === 'vidsrc') {
+      const identifier = imdbId || tmdbId;
       return type === 'tv'
-        ? `https://player.smashy.stream/tv/${tmdbId}?s=${s}&e=${e}&lang=${langCode}&audio=es`
-        : `https://player.smashy.stream/movie/${tmdbId}?lang=${langCode}&audio=es`;
+        ? `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`
+        : `https://vidsrc.to/embed/movie/${identifier}`;
     }
 
-    // Servidor Smashy 1 (playere.php optimizado con parámetros en español)
+    // Fuente SmashyStream
     return type === 'tv'
-      ? `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&season=${s}&episode=${e}&lang=${langCode}&audio=es&sub=es`
-      : `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&lang=${langCode}&audio=es&sub=es`;
-  }, [type, tmdbId, currentSeason, currentEpisode, audioPreference, serverEngine]);
+      ? `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&season=${s}&episode=${e}`
+      : `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}`;
+  }, [source, type, tmdbId, imdbId, currentSeason, currentEpisode]);
 
-  const streamUrl = getSmashyUrl();
+  const streamUrl = getStreamUrl();
 
   const clearTimer = useCallback(() => {
     if (timeoutTimerRef.current) {
@@ -134,12 +125,12 @@ export const Player: React.FC<PlayerProps> = ({
     setCurrentSeason(season);
     setCurrentEpisode(episode);
     setShowPlayOverlay(true);
-    setShieldActive(true); // Reactivar escudo al cambiar de episodio o título
+    setShieldActive(true);
     setIframeKey((prev) => prev + 1);
     startTimer();
-  }, [tmdbId, type, season, episode, audioPreference, serverEngine, startTimer]);
+  }, [tmdbId, imdbId, type, season, episode, source, startTimer]);
 
-  // Detección de cambios de estado en Fullscreen nativo
+  // Listener para estado Fullscreen nativo
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = Boolean(
@@ -157,19 +148,14 @@ export const Player: React.FC<PlayerProps> = ({
     };
   }, []);
 
-  /**
-   * 2. Soporte para Control Remoto Android TV (D-pad & Teclado)
-   * Permite navegación fluida sin necesidad de ratón en Smart TVs y TV Boxes
-   */
+  // Navegación D-pad / Control Remoto TV
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar si el usuario está escribiendo en un input
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
 
       switch (e.key) {
-        // Tecla Volver / Escape en Android TV
         case 'Escape':
         case 'Backspace':
         case 'GoBack':
@@ -180,35 +166,24 @@ export const Player: React.FC<PlayerProps> = ({
           }
           break;
 
-        // Tecla F: Alternar Pantalla Completa
         case 'f':
         case 'F':
           e.preventDefault();
           handleToggleFullscreen();
           break;
 
-        // Tecla A: Alternar Formato 16:9 / 9:16
         case 'a':
         case 'A':
           e.preventDefault();
           handleToggleAspectRatio();
           break;
 
-        // Tecla S: Alternar Servidor Smashy 1 / 2
         case 's':
         case 'S':
           e.preventDefault();
-          setServerEngine((prev) => (prev === 'smashy1' ? 'smashy2' : 'smashy1'));
+          setSource((prev) => (prev === 'smashy' ? 'vidsrc' : 'smashy'));
           break;
 
-        // Tecla L: Alternar Audio Latino / Castellano
-        case 'l':
-        case 'L':
-          e.preventDefault();
-          setAudioPreference((prev) => (prev === 'latino' ? 'castellano' : 'latino'));
-          break;
-
-        // Tecla R: Recargar
         case 'r':
         case 'R':
           e.preventDefault();
@@ -224,7 +199,6 @@ export const Player: React.FC<PlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen, onClose]);
 
-  // Función de Pantalla Completa Nativa dentro de la web
   const handleToggleFullscreen = async () => {
     if (!playerContainerRef.current) return;
 
@@ -259,7 +233,7 @@ export const Player: React.FC<PlayerProps> = ({
         }
       }
     } catch (err) {
-      console.warn('Error alternando pantalla completa:', err);
+      console.warn('Error en pantalla completa:', err);
     }
   };
 
@@ -310,20 +284,14 @@ export const Player: React.FC<PlayerProps> = ({
     setHasTimedOut(false);
   };
 
-  /**
-   * 3. Manejo de Inicio y Absorción de Clics Publicitarios
-   * Desbloquea la reproducción y absorbe la capa trampa inicial
-   */
   const handlePlayClick = () => {
     setShowPlayOverlay(false);
-    // El escudo de absorción permanece activo unos momentos o hasta el primer toque del usuario
   };
 
+  // Absorbe silenciosamente el primer clic publicitario sin mostrar textos
   const handleAbsorbClick = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setAbsorbedClicksCount((prev) => prev + 1);
-    // Disuelve la capa protectora tras absorber el clic publicitario inicial
     setShieldActive(false);
   };
 
@@ -336,7 +304,7 @@ export const Player: React.FC<PlayerProps> = ({
   return (
     <div className="w-full space-y-3 select-none">
       
-      {/* Contenedor del Reproductor Estilo Obsidian / Android TV */}
+      {/* Contenedor del Reproductor Estilo Netflix / Pluto TV */}
       <div
         ref={playerContainerRef}
         className={`relative overflow-hidden rounded-2xl border border-neutral-900 bg-black shadow-2xl flex flex-col transition-all duration-300 ${
@@ -344,127 +312,79 @@ export const Player: React.FC<PlayerProps> = ({
         }`}
       >
         
-        {/* Barra Superior con Soporte para Control Remoto */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-neutral-900/95 to-black/95 border-b border-neutral-800/80 z-30">
+        {/* Barra Superior Minimalista */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-neutral-900/90 to-black/95 border-b border-neutral-900 z-30">
           <div className="flex items-center gap-3 min-w-0">
             <span className="h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse shrink-0" />
             <h2 className="text-sm sm:text-base font-black text-white truncate tracking-tight">
-              {title || (type === 'tv' ? 'Serie en Reproducción' : 'Película en Reproducción')}
+              {title || (type === 'tv' ? 'Serie' : 'Película')}
             </h2>
-            
-            {/* Indicador de Escudo Anti-Publicidad */}
-            <div 
-              className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition ${
-                shieldActive
-                  ? 'bg-emerald-950/80 border-emerald-800/80 text-emerald-300'
-                  : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-              }`}
-              title="Escudo Anti-Publicidad de Mbox_ec"
-            >
-              <ShieldCheck className="h-3 w-3 text-emerald-400" />
-              <span>Escudo Activo</span>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            
-            {/* Botón Escudo Anti-Publicidad (Reactivable con D-pad) */}
-            <button
-              type="button"
-              tabIndex={0}
-              onClick={() => setShieldActive(!shieldActive)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                shieldActive
-                  ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300 hover:bg-emerald-900/80'
-                  : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800'
-              }`}
-              title="Alternar Capa Protectora Anti-Publicidad"
-            >
-              <Shield className={`h-3.5 w-3.5 ${shieldActive ? 'text-emerald-400' : 'text-neutral-400'}`} />
-              <span className="hidden sm:inline text-[11px]">Escudo</span>
-            </button>
-
-            {/* Selector de Pista de Audio: Latino vs Castellano */}
-            <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 text-xs">
+            {/* Selector de Fuente Limpio: Smashy o VidSrc */}
+            <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 text-xs">
               <button
                 type="button"
                 tabIndex={0}
-                onClick={() => setAudioPreference('latino')}
-                className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                  audioPreference === 'latino'
+                onClick={() => setSource('smashy')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                  source === 'smashy'
                     ? 'bg-red-600 text-white shadow-sm'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Priorizar audio en Español Latino (Tecla L)"
+                title="Fuente Smashy"
               >
-                Latino
+                Smashy
               </button>
               <button
                 type="button"
                 tabIndex={0}
-                onClick={() => setAudioPreference('castellano')}
-                className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                  audioPreference === 'castellano'
+                onClick={() => setSource('vidsrc')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                  source === 'vidsrc'
                     ? 'bg-red-600 text-white shadow-sm'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Priorizar audio en Español Castellano (Tecla L)"
+                title="Fuente VidSrc"
               >
-                Castellano
+                VidSrc
               </button>
             </div>
-
-            {/* Selector de Motor Smashy */}
-            <button
-              type="button"
-              tabIndex={0}
-              onClick={() => setServerEngine(serverEngine === 'smashy1' ? 'smashy2' : 'smashy1')}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-semibold transition cursor-pointer"
-              title="Alternar entre servidor Smashy 1 y 2 (Tecla S)"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-red-500" />
-              <span className="text-[11px] font-mono">{serverEngine === 'smashy1' ? 'Servidor 1' : 'Servidor 2'}</span>
-            </button>
 
             {/* Selector de Formato 16:9 / 9:16 */}
             <button
               type="button"
               tabIndex={0}
               onClick={handleToggleAspectRatio}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-semibold transition cursor-pointer"
-              title={`Alternar formato (${aspectRatio}). Tecla A.`}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 border border-neutral-800 text-xs font-semibold transition cursor-pointer"
+              title="Alternar 16:9 u 9:16"
             >
               {aspectRatio === '16:9' ? (
                 <>
                   <Tv className="h-3.5 w-3.5 text-red-500" />
-                  <span className="font-mono text-[11px] font-bold">16:9</span>
+                  <span className="font-mono text-[11px]">16:9</span>
                 </>
               ) : (
                 <>
                   <Smartphone className="h-3.5 w-3.5 text-red-500" />
-                  <span className="font-mono text-[11px] font-bold">9:16</span>
+                  <span className="font-mono text-[11px]">9:16</span>
                 </>
               )}
             </button>
 
-            {/* Botón de Pantalla Completa Nativa */}
+            {/* Botón de Pantalla Completa */}
             <button
               type="button"
               tabIndex={0}
               onClick={handleToggleFullscreen}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 hover:border-neutral-700 text-xs font-semibold transition cursor-pointer"
-              title={isFullscreen ? 'Salir de pantalla completa (Tecla F / Esc)' : 'Pantalla completa nativa (Tecla F)'}
+              className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
+              title="Pantalla Completa"
             >
               {isFullscreen ? (
-                <>
-                  <Minimize className="h-3.5 w-3.5 text-red-500" />
-                  <span className="hidden sm:inline">Salir</span>
-                </>
+                <Minimize className="h-4 w-4 text-red-500" />
               ) : (
-                <>
-                  <Maximize className="h-3.5 w-3.5 text-red-500" />
-                  <span className="hidden sm:inline">Pantalla Completa</span>
-                </>
+                <Maximize className="h-4 w-4 text-red-500" />
               )}
             </button>
 
@@ -473,8 +393,8 @@ export const Player: React.FC<PlayerProps> = ({
               type="button"
               tabIndex={0}
               onClick={handleReload}
-              className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
-              title="Recargar reproductor (Tecla R)"
+              className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
+              title="Recargar"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
             </button>
@@ -484,8 +404,8 @@ export const Player: React.FC<PlayerProps> = ({
                 type="button"
                 tabIndex={0}
                 onClick={onClose}
-                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-red-500 border border-neutral-800 transition cursor-pointer"
-                title="Cerrar reproductor (Escape / Back)"
+                className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-400 hover:text-red-500 border border-neutral-800 transition cursor-pointer"
+                title="Cerrar"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -493,65 +413,23 @@ export const Player: React.FC<PlayerProps> = ({
           </div>
         </div>
 
-        {/* Barra Informativa de Audio y Escudo */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-gradient-to-r from-neutral-950 via-black to-neutral-950 border-b border-neutral-900 text-xs text-neutral-300">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <Volume2 className="h-4 w-4 text-red-500 shrink-0" />
-              <span className="font-medium text-neutral-200">
-                Audio: <strong className="text-white">Español {audioPreference === 'latino' ? 'Latino' : 'Castellano'}</strong>
-              </span>
-            </div>
-
-            {absorbedClicksCount > 0 && (
-              <span className="text-[11px] text-emerald-400 font-mono">
-                · {absorbedClicksCount} anuncio{absorbedClicksCount > 1 ? 's' : ''} neutralizado{absorbedClicksCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="hidden lg:inline text-[11px] text-neutral-500">
-              Controles TV: <kbd className="px-1 py-0.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[10px]">F</kbd> Pantalla completa · <kbd className="px-1 py-0.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[10px]">A</kbd> Formato · <kbd className="px-1 py-0.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[10px]">Esc</kbd> Volver
-            </span>
-            <button
-              type="button"
-              tabIndex={0}
-              onClick={() => setShowAudioHelp(!showAudioHelp)}
-              className="text-[11px] text-red-400 hover:text-red-300 underline font-medium cursor-pointer"
-            >
-              {showAudioHelp ? 'Ocultar ayuda' : '¿Cómo cambiar audio en pantalla?'}
-            </button>
-          </div>
-        </div>
-
-        {/* Guía Rápida de Pista de Audio */}
-        {showAudioHelp && (
-          <div className="px-4 py-2.5 bg-neutral-900/95 border-b border-neutral-800 text-xs text-neutral-300 animate-in fade-in">
-            <p className="leading-relaxed">
-              💡 <strong>Activar audio en español:</strong> Dentro del reproductor de video, en la barra inferior derecha, haz clic en el icono de <strong>Engranaje (⚙️)</strong> o en el icono de <strong>Audio / Subtítulos (💬)</strong> y selecciona la pista <em>"Español Latino"</em> o <em>"Castellano"</em>. Si un servidor no tiene la pista en español para este título, pulsa el botón <strong>"Servidor 2"</strong> en la barra superior.
-            </p>
-          </div>
-        )}
-
         {/* Controles de Temporada y Episodio para Series */}
         {type === 'tv' && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-neutral-950 border-b border-neutral-900 text-xs z-20">
+          <div className="flex items-center justify-between px-4 py-2 bg-neutral-950 border-b border-neutral-900 text-xs z-20">
             <div className="flex items-center gap-4">
               {/* Temporada */}
               <div className="flex items-center gap-1.5">
-                <span className="text-neutral-400 font-medium">Temporada:</span>
+                <span className="text-neutral-400">Temporada</span>
                 <button
                   type="button"
                   tabIndex={0}
                   disabled={currentSeason <= 1}
                   onClick={() => handleSeasonChange(currentSeason - 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 disabled:opacity-20 text-white transition cursor-pointer"
-                  title="Temporada anterior"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
-                <span className="font-bold text-red-500 px-1.5 tabular-nums text-sm">
+                <span className="font-bold text-red-500 px-1.5 tabular-nums">
                   {currentSeason}
                 </span>
                 <button
@@ -559,7 +437,6 @@ export const Player: React.FC<PlayerProps> = ({
                   tabIndex={0}
                   onClick={() => handleSeasonChange(currentSeason + 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 text-white transition cursor-pointer"
-                  title="Siguiente temporada"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -567,18 +444,17 @@ export const Player: React.FC<PlayerProps> = ({
 
               {/* Episodio */}
               <div className="flex items-center gap-1.5">
-                <span className="text-neutral-400 font-medium">Episodio:</span>
+                <span className="text-neutral-400">Episodio</span>
                 <button
                   type="button"
                   tabIndex={0}
                   disabled={currentEpisode <= 1}
                   onClick={() => handleEpisodeChange(currentEpisode - 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 disabled:opacity-20 text-white transition cursor-pointer"
-                  title="Episodio anterior"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
-                <span className="font-bold text-red-500 px-1.5 tabular-nums text-sm">
+                <span className="font-bold text-red-500 px-1.5 tabular-nums">
                   {currentEpisode}
                 </span>
                 <button
@@ -586,15 +462,14 @@ export const Player: React.FC<PlayerProps> = ({
                   tabIndex={0}
                   onClick={() => handleEpisodeChange(currentEpisode + 1)}
                   className="p-1 rounded bg-neutral-900 hover:bg-neutral-800 text-white transition cursor-pointer"
-                  title="Siguiente episodio"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            <span className="text-neutral-400 font-semibold tracking-wide uppercase text-[11px]">
-              T{currentSeason} : E{currentEpisode}
+            <span className="text-neutral-500 font-mono text-[11px]">
+              T{currentSeason}:E{currentEpisode}
             </span>
           </div>
         )}
@@ -621,16 +496,12 @@ export const Player: React.FC<PlayerProps> = ({
             {isLoading && !hasTimedOut && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/85 backdrop-blur-xs text-white space-y-3 pointer-events-none">
                 <div className="h-10 w-10 rounded-full border-3 border-red-600 border-t-transparent animate-spin" />
-                <div className="text-xs font-bold tracking-wider text-neutral-300 uppercase">
-                  Cargando reproductor en español...
-                </div>
               </div>
             )}
 
             {/* Aviso de Recarga */}
             {hasTimedOut && (
               <div className="absolute top-3 right-3 z-30 flex items-center gap-2 p-2 rounded-xl bg-neutral-950/90 border border-neutral-800 text-xs text-neutral-300 shadow-xl backdrop-blur-sm">
-                <span>¿Tarda en cargar?</span>
                 <button
                   type="button"
                   tabIndex={0}
@@ -656,7 +527,7 @@ export const Player: React.FC<PlayerProps> = ({
                 style={
                   backdropUrl
                     ? {
-                        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url(${backdropUrl})`,
+                        backgroundImage: `linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)), url(${backdropUrl})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                       }
@@ -668,20 +539,14 @@ export const Player: React.FC<PlayerProps> = ({
                     <Play className="h-8 w-8 sm:h-10 sm:w-10 fill-white text-white translate-x-1" />
                   </div>
 
-                  <div className="space-y-1">
-                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                      {title || 'Reproducir Ahora'}
-                    </h3>
-                    <p className="text-xs text-neutral-300">
-                      Audio en Español {audioPreference === 'latino' ? 'Latino' : 'Castellano'} · Pulsa para iniciar
-                    </p>
-                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                    {title || 'Reproducir'}
+                  </h3>
                 </div>
               </div>
             )}
 
-            {/* 4. Capa Invisible de Absorción (Overlay Hack / Ghost-Click Shield) */}
-            {/* Se posiciona temporalmente sobre el iframe tras iniciar la reproducción. Absorbe el primer clic de clickjacking y se disuelve */}
+            {/* Capa Silenciosa de Absorción de Clickjacking (sin textos visuales) */}
             {!showPlayOverlay && shieldActive && (
               <div
                 tabIndex={0}
@@ -692,21 +557,15 @@ export const Player: React.FC<PlayerProps> = ({
                     handleAbsorbClick(e as any);
                   }
                 }}
-                className="absolute inset-0 z-15 cursor-pointer bg-transparent hover:bg-red-950/10 flex items-end justify-center p-4 transition-colors"
-                title="Pulsa para absorber el anuncio inicial y desbloquear la pantalla limpia"
-              >
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-950/90 border border-emerald-500/80 text-emerald-300 text-xs font-semibold shadow-2xl backdrop-blur-md animate-pulse">
-                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  <span>Escudo activo: Pulsa una vez para desbloquear el reproductor limpio</span>
-                </div>
-              </div>
+                className="absolute inset-0 z-15 cursor-pointer bg-transparent"
+              />
             )}
 
-            {/* Iframe SmashyStream Estándar sin restricciones de sandbox que lo rompan */}
+            {/* Iframe del Reproductor */}
             <iframe
               key={iframeKey}
               src={streamUrl}
-              title={title || 'Reproductor de Video'}
+              title={title || 'Reproductor'}
               className="h-full w-full border-0"
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture; screen-wake-lock"
               referrerPolicy="origin"

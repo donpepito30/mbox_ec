@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Info,
   RefreshCw,
-  Volume2,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
@@ -243,9 +242,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* Reproductor SmashyStream */}
+            {/* Reproductor Multi-Fuente (Smashy & VidSrc) */}
             <Player
               tmdbId={watchingItem.id}
+              imdbId={watchingDetails?.imdb_id || watchingItem.imdb_id}
               type={watchingItem.media_type === 'tv' ? 'tv' : 'movie'}
               season={1}
               episode={1}
@@ -274,11 +274,6 @@ export default function App() {
                           <span className="font-mono">{Math.floor(watchingDetails.runtime / 60)}h {watchingDetails.runtime % 60}m</span>
                         </>
                       )}
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1 font-bold text-red-400 bg-red-950/70 border border-red-900/60 px-1.5 py-0.5 rounded text-[10px]">
-                        <Volume2 className="h-3 w-3" />
-                        Audio en Español
-                      </span>
                     </div>
                   </div>
 
@@ -402,11 +397,6 @@ export default function App() {
                       </span>
                       <span aria-hidden="true" className="text-neutral-700">·</span>
                       <span className="font-mono text-neutral-300">{featuredYear}</span>
-                      <span aria-hidden="true" className="text-neutral-700">·</span>
-                      <span className="inline-flex items-center gap-1 font-bold text-red-300 bg-red-950/80 border border-red-800/80 px-2 py-0.5 rounded text-[10px]">
-                        <Volume2 className="h-3 w-3 text-red-400" />
-                        Audio en Español (Latino / Castellano)
-                      </span>
                     </div>
 
                     {/* Título Principal */}
@@ -624,12 +614,7 @@ export default function App() {
                               {isTv ? <Tv className="h-3 w-3 text-neutral-500" /> : <Film className="h-3 w-3 text-neutral-500" />}
                               <span>{isTv ? 'Serie' : 'Película'}</span>
                             </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold text-red-400 bg-red-950/70 border border-red-900/60 px-1.5 py-0.2 rounded">
-                                Español
-                              </span>
-                              <span className="font-mono tabular-nums text-neutral-400">{year}</span>
-                            </div>
+                            <span className="font-mono tabular-nums text-neutral-400">{year}</span>
                           </div>
                         </div>
                       </article>
