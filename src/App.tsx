@@ -1,5 +1,6 @@
 // Mbox_ec - Plataforma de Streaming de Películas y Series
 // Estilo Minimalista Netflix / Pluto TV en Negro Obsidiana, Rojo y Blanco
+// Acceso Estricto Protegido: Bloqueo Cero-Confianza con Registro Único por Correo Google
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -15,15 +16,14 @@ import {
   RefreshCw,
   Bookmark,
   BookmarkCheck,
-  User as UserIcon,
   LogOut,
-  LogIn,
+  ShieldCheck,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
 import { Player } from './components/Player.tsx';
 import { HeroBanner } from './components/HeroBanner.tsx';
-import { AuthModal } from './components/AuthModal.tsx';
+import { GoogleAuthGate } from './components/GoogleAuthGate.tsx';
 import { MediaDetailModal } from './components/MediaDetailModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
@@ -32,6 +32,7 @@ import {
   logoutUser,
   isInWatchlist,
   toggleWatchlist,
+  validateActiveSessionIntegrity,
   User,
 } from './services/auth.ts';
 
@@ -41,9 +42,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Estado de Autenticación de Usuario
+  // Estado de Autenticación Exclusiva de Google
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [watchlistVersion, setWatchlistVersion] = useState<number>(0);
 
   // Estado de reproducción /watch/[id]
@@ -58,6 +58,18 @@ export default function App() {
     setCurrentUser(getCurrentUser());
     setWatchlistVersion((prev) => prev + 1);
   }, []);
+
+  // MEDIDA DE SEGURIDAD: Verificación periódica de integridad de sesión criptográfica
+  useEffect(() => {
+    if (currentUser) {
+      validateActiveSessionIntegrity().then((isValid) => {
+        if (!isValid) {
+          console.warn('[Mbox_ec Security] Integridad de sesión comprometida. Redirigiendo a Puerta de Enlace.');
+          setCurrentUser(null);
+        }
+      });
+    }
+  }, [currentUser]);
 
   // Cargar detalles y trailer al reproducir
   useEffect(() => {
@@ -78,8 +90,10 @@ export default function App() {
     };
   }, [watchingItem]);
 
-  // Cargar contenidos en tendencia desde TMDb
+  // Cargar contenidos en tendencia desde TMDb (SOLO para usuarios autenticados)
   const loadContent = useCallback(async (type: MediaType, query: string) => {
+    if (!getCurrentUser()) return; // Barrera de red: no consumir APIs si no hay sesión Google
+
     setIsLoading(true);
     try {
       if (query.trim()) {
@@ -96,8 +110,9 @@ export default function App() {
     }
   }, []);
 
-  // Efecto de búsqueda con debounce
+  // Efecto de búsqueda con debounce (SOLO si hay usuario autenticado)
   useEffect(() => {
+    if (!currentUser) return;
     if (selectedMediaType === 'watchlist') return;
 
     if (!searchQuery.trim()) {
@@ -110,13 +125,13 @@ export default function App() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [selectedMediaType, searchQuery, loadContent]);
+  }, [currentUser, selectedMediaType, searchQuery, loadContent]);
 
   // Neutralizador Global de Pop-ups (Anti-Clickjacking / Ad Interceptor)
   useEffect(() => {
     const originalOpen = window.open;
     window.open = function (url?: string | URL) {
-      console.warn('[Mbox_ec Shield] Ventana emergente no deseada bloqueada:', url);
+      console.warn('[Mbox_ec Shield] Ventana emergente no deseada interceptada:', url);
       return null;
     };
     return () => {
@@ -135,9 +150,7 @@ export default function App() {
       }
 
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
-        if (isAuthModalOpen) {
-          setIsAuthModalOpen(false);
-        } else if (selectedDetailItem) {
+        if (selectedDetailItem) {
           setSelectedDetailItem(null);
         } else if (watchingItem) {
           setWatchingItem(null);
@@ -147,7 +160,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedDetailItem, watchingItem, isAuthModalOpen]);
+  }, [selectedDetailItem, watchingItem]);
 
   // Iniciar reproducción
   const handleWatch = (item: MediaItem) => {
@@ -161,28 +174,19 @@ export default function App() {
 
   // Manejo de Favoritos / Mi Lista
   const handleToggleWatchlist = (item: MediaItem) => {
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
-      return;
-    }
     toggleWatchlist(item);
     refreshUserSession();
   };
 
+  // Cierre de Sesión Seguro con Purga Criptográfica
   const handleLogout = () => {
     logoutUser();
-    refreshUserSession();
-    if (selectedMediaType === 'watchlist') {
-      setSelectedMediaType('all');
-    }
+    setCurrentUser(null);
+    setItems([]);
+    setWatchingItem(null);
+    setSelectedDetailItem(null);
+    setSelectedMediaType('all');
   };
-
-  // Lista de pósteres para el mosaico del modal de autenticación
-  const moviePosterUrls = useMemo(() => {
-    return items
-      .filter((item) => Boolean(item.poster_path))
-      .map((item) => getImageUrl(item.poster_path, 'w500'));
-  }, [items]);
 
   // Títulos para el catálogo según filtro activo
   const displayedCatalogItems = useMemo(() => {
@@ -198,6 +202,30 @@ export default function App() {
     }
     return items;
   }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, watchlistVersion]);
+
+  // Lista de pósteres para el mosaico del modal de autenticación
+  const moviePosterUrls = useMemo(() => {
+    return items
+      .filter((item) => Boolean(item.poster_path))
+      .map((item) => getImageUrl(item.poster_path, 'w500'));
+  }, [items]);
+
+  // ==========================================================================
+  // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA)
+  // No se renderiza ningún contenido, catálogo ni reproductor si no hay sesión Google
+  // ==========================================================================
+  if (!currentUser) {
+    return (
+      <GoogleAuthGate
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          loadContent('all', '');
+        }}
+        moviePosters={moviePosterUrls}
+        initialEmail="jj863620@gmail.com"
+      />
+    );
+  }
 
   return (
     <div 
@@ -274,11 +302,7 @@ export default function App() {
             <button
               onClick={() => {
                 setWatchingItem(null);
-                if (!currentUser) {
-                  setIsAuthModalOpen(true);
-                } else {
-                  setSelectedMediaType('watchlist');
-                }
+                setSelectedMediaType('watchlist');
               }}
               className={`transition cursor-pointer text-xs sm:text-sm flex items-center gap-1.5 ${
                 !watchingItem && selectedMediaType === 'watchlist'
@@ -295,35 +319,47 @@ export default function App() {
               )}
             </button>
 
-            {/* Perfil de Usuario / Botón de Iniciar Sesión */}
-            {currentUser ? (
-              <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
+            {/* Perfil de Usuario con Identidad Oficial Google */}
+            <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-neutral-800">
+              <div className="relative">
                 <div
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
-                  title={currentUser.email}
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
+                  title={`Conectado como ${currentUser.email} (Google Account)`}
                 >
                   {currentUser.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="hidden md:inline text-xs text-neutral-300 font-semibold max-w-[90px] truncate">
+                {/* Insignia Google SVG Oficial */}
+                <div 
+                  className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-xs p-0.5"
+                  title="Cuenta Google Verificada"
+                >
+                  <svg className="h-full w-full" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                  </svg>
+                </div>
+              </div>
+
+              <div className="hidden lg:flex flex-col text-left">
+                <span className="text-xs text-neutral-200 font-bold max-w-[120px] truncate leading-tight">
                   {currentUser.name}
                 </span>
-                <button
-                  onClick={handleLogout}
-                  className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-red-400 transition cursor-pointer"
-                  title="Cerrar Sesión"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </button>
+                <span className="text-[10px] text-neutral-500 font-mono max-w-[120px] truncate leading-tight">
+                  {currentUser.email}
+                </span>
               </div>
-            ) : (
+
+              {/* Botón de Cierre de Sesión Seguro */}
               <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-md shadow-red-950/70 hover:bg-red-500 transition cursor-pointer"
+                onClick={handleLogout}
+                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-red-400 border border-neutral-800 transition cursor-pointer"
+                title="Cerrar Sesión de Google"
               >
-                <LogIn className="h-3.5 w-3.5" />
-                <span>Iniciar Sesión</span>
+                <LogOut className="h-3.5 w-3.5" />
               </button>
-            )}
+            </div>
 
             {/* Botón PWA Install */}
             <PWAInstallButton />
@@ -550,13 +586,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      if (!currentUser) {
-                        setIsAuthModalOpen(true);
-                      } else {
-                        setSelectedMediaType('watchlist');
-                      }
-                    }}
+                    onClick={() => setSelectedMediaType('watchlist')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'watchlist'
                         ? 'bg-red-600 text-white shadow-md shadow-red-950'
@@ -606,9 +636,7 @@ export default function App() {
                   </h2>
                   {selectedMediaType === 'watchlist' && (
                     <p className="text-xs text-neutral-400 mt-1">
-                      {currentUser
-                        ? `Títulos guardados para ${currentUser.name}`
-                        : 'Inicia sesión para ver tu lista guardada'}
+                      Títulos guardados para {currentUser.name} ({currentUser.email})
                     </p>
                   )}
                 </div>
@@ -759,17 +787,6 @@ export default function App() {
 
       </main>
 
-      {/* Modal de Autenticación y Registro por Correo (Mosaico Cinemático de Portadas) */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={(user) => {
-          setCurrentUser(user);
-          refreshUserSession();
-        }}
-        moviePosters={moviePosterUrls}
-      />
-
       {/* Modal de Ficha Técnica */}
       {selectedDetailItem && (
         <MediaDetailModal
@@ -779,7 +796,7 @@ export default function App() {
         />
       )}
 
-      {/* Footer Minimalista Mbox_ec */}
+      {/* Footer Minimalista Mbox_ec con Insignia de Protección */}
       <footer className="border-t border-neutral-900 bg-black py-8 text-neutral-500 text-xs text-center">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -787,7 +804,11 @@ export default function App() {
               MBOX<span className="text-red-600">_EC</span>
             </span>
             <span className="text-neutral-600">·</span>
-            <span>Películas y Series en Streaming</span>
+            <span>Streaming Protegido con Google Auth</span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-neutral-400">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+            <span>Autenticación de Cuentas Google Verificada</span>
           </div>
           <p>© {new Date().getFullYear()} Mbox_ec · Todos los derechos reservados.</p>
         </div>
