@@ -1,6 +1,7 @@
 // Mbox_ec - Plataforma de Streaming de Películas y Series
 // Estilo Minimalista Netflix / Pluto TV en Negro Obsidiana, Rojo y Blanco
 // Acceso Estricto Protegido: Bloqueo Cero-Confianza con Registro Único por Correo Google
+// Control Total de Usuarios y Permanencia por el Administrador
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -18,12 +19,15 @@ import {
   BookmarkCheck,
   LogOut,
   ShieldCheck,
+  Shield,
+  Crown,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
 import { Player } from './components/Player.tsx';
 import { HeroBanner } from './components/HeroBanner.tsx';
 import { GoogleAuthGate } from './components/GoogleAuthGate.tsx';
+import { AdminUsersModal } from './components/AdminUsersModal.tsx';
 import { MediaDetailModal } from './components/MediaDetailModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
@@ -33,6 +37,7 @@ import {
   isInWatchlist,
   toggleWatchlist,
   validateActiveSessionIntegrity,
+  isAdmin,
   User,
 } from './services/auth.ts';
 
@@ -45,6 +50,9 @@ export default function App() {
   // Estado de Autenticación Exclusiva de Google
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [watchlistVersion, setWatchlistVersion] = useState<number>(0);
+
+  // Modal de Panel de Control de Usuarios (Admin)
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
   // Estado de reproducción /watch/[id]
   const [watchingItem, setWatchingItem] = useState<MediaItem | null>(null);
@@ -59,17 +67,17 @@ export default function App() {
     setWatchlistVersion((prev) => prev + 1);
   }, []);
 
-  // MEDIDA DE SEGURIDAD: Verificación periódica de integridad de sesión criptográfica
+  // MEDIDA DE SEGURIDAD: Verificación periódica de integridad de sesión criptográfica y permanencia
   useEffect(() => {
     if (currentUser) {
       validateActiveSessionIntegrity().then((isValid) => {
         if (!isValid) {
-          console.warn('[Mbox_ec Security] Integridad de sesión comprometida. Redirigiendo a Puerta de Enlace.');
-          setCurrentUser(null);
+          console.warn('[Mbox_ec Security] Sesión inválida o revocada. Redirigiendo a Puerta de Enlace.');
+          refreshUserSession();
         }
       });
     }
-  }, [currentUser]);
+  }, [currentUser, refreshUserSession]);
 
   // Cargar detalles y trailer al reproducir
   useEffect(() => {
@@ -90,9 +98,10 @@ export default function App() {
     };
   }, [watchingItem]);
 
-  // Cargar contenidos en tendencia desde TMDb (SOLO para usuarios autenticados)
+  // Cargar contenidos en tendencia desde TMDb (SOLO para usuarios autenticados y activos)
   const loadContent = useCallback(async (type: MediaType, query: string) => {
-    if (!getCurrentUser()) return; // Barrera de red: no consumir APIs si no hay sesión Google
+    const user = getCurrentUser();
+    if (!user || user.status !== 'ACTIVE') return;
 
     setIsLoading(true);
     try {
@@ -110,9 +119,9 @@ export default function App() {
     }
   }, []);
 
-  // Efecto de búsqueda con debounce (SOLO si hay usuario autenticado)
+  // Efecto de búsqueda con debounce
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.status !== 'ACTIVE') return;
     if (selectedMediaType === 'watchlist') return;
 
     if (!searchQuery.trim()) {
@@ -150,7 +159,9 @@ export default function App() {
       }
 
       if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
-        if (selectedDetailItem) {
+        if (isAdminModalOpen) {
+          setIsAdminModalOpen(false);
+        } else if (selectedDetailItem) {
           setSelectedDetailItem(null);
         } else if (watchingItem) {
           setWatchingItem(null);
@@ -160,7 +171,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedDetailItem, watchingItem]);
+  }, [selectedDetailItem, watchingItem, isAdminModalOpen]);
 
   // Iniciar reproducción
   const handleWatch = (item: MediaItem) => {
@@ -211,10 +222,10 @@ export default function App() {
   }, [items]);
 
   // ==========================================================================
-  // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA)
-  // No se renderiza ningún contenido, catálogo ni reproductor si no hay sesión Google
+  // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA Y CONTROL DE PERMANENCIA)
+  // No se renderiza ningún contenido, catálogo ni reproductor si no hay sesión Google ACTIVA
   // ==========================================================================
-  if (!currentUser) {
+  if (!currentUser || currentUser.status !== 'ACTIVE') {
     return (
       <GoogleAuthGate
         onSuccess={(user) => {
@@ -255,7 +266,7 @@ export default function App() {
           </div>
 
           {/* Navegación y Acciones */}
-          <nav className="flex items-center gap-3 sm:gap-6 text-sm font-medium">
+          <nav className="flex items-center gap-2.5 sm:gap-5 text-sm font-medium">
             <button
               onClick={() => {
                 setWatchingItem(null);
@@ -319,26 +330,42 @@ export default function App() {
               )}
             </button>
 
+            {/* Botón Panel de Control (Solo visible para Administradores y Super Admin) */}
+            {isAdmin(currentUser) && (
+              <button
+                onClick={() => setIsAdminModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1.5 text-xs font-bold transition cursor-pointer shadow-sm"
+                title="Panel de Control de Usuarios (Super Admin)"
+              >
+                <Shield className="h-3.5 w-3.5 text-red-500" />
+                <span className="hidden sm:inline">Panel Admin</span>
+              </button>
+            )}
+
             {/* Perfil de Usuario con Identidad Oficial Google */}
-            <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-neutral-800">
+            <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
               <div className="relative">
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
-                  title={`Conectado como ${currentUser.email} (Google Account)`}
+                  title={`Conectado como ${currentUser.email} (${currentUser.role})`}
                 >
                   {currentUser.name.charAt(0).toUpperCase()}
                 </div>
-                {/* Insignia Google SVG Oficial */}
+                {/* Insignia Google SVG Oficial o Corona de Super Admin */}
                 <div 
                   className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-xs p-0.5"
-                  title="Cuenta Google Verificada"
+                  title={currentUser.role === 'SUPER_ADMIN' ? 'Super Administrador Propietario' : 'Cuenta Google Verificada'}
                 >
-                  <svg className="h-full w-full" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                  </svg>
+                  {currentUser.role === 'SUPER_ADMIN' ? (
+                    <Crown className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                  ) : (
+                    <svg className="h-full w-full" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                      <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                      <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                    </svg>
+                  )}
                 </div>
               </div>
 
@@ -653,7 +680,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Catálogo en Grid Estilo Netflix / Pluto TV (2 cols mobile a 5 cols desktop) */}
+              {/* Catálogo en Grid Estilo Netflix / Pluto TV */}
               {isLoading && selectedMediaType !== 'watchlist' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
                   {Array.from({ length: 10 }).map((_, idx) => (
@@ -787,6 +814,16 @@ export default function App() {
 
       </main>
 
+      {/* Modal del Panel de Control de Usuarios (Super Admin) */}
+      {isAdminModalOpen && (
+        <AdminUsersModal
+          isOpen={isAdminModalOpen}
+          onClose={() => setIsAdminModalOpen(false)}
+          currentUser={currentUser}
+          onUserUpdated={refreshUserSession}
+        />
+      )}
+
       {/* Modal de Ficha Técnica */}
       {selectedDetailItem && (
         <MediaDetailModal
@@ -808,7 +845,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-1 text-[11px] text-neutral-400">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-            <span>Autenticación de Cuentas Google Verificada</span>
+            <span>Control de Permanencia Activo (Super Admin: jj863620@gmail.com)</span>
           </div>
           <p>© {new Date().getFullYear()} Mbox_ec · Todos los derechos reservados.</p>
         </div>
