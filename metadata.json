@@ -1,6 +1,6 @@
 {
-  "name": "Mbox_ec - Streaming",
-  "description": "Plataforma de streaming minimalista para películas y series con reproducción optimizada.",
+  "name": "Mbox_Ec - Streaming en Español",
+  "description": "Tu cine en casa: Películas, Series y Contenido Exclusivo en vivo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

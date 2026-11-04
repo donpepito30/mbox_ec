@@ -27,6 +27,7 @@ import {
   logoutUser,
   User,
 } from '../services/auth.ts';
+import { CinemaBoxLogo } from './CinemaBoxLogo.tsx';
 
 interface GoogleAuthGateProps {
   onSuccess: (user: User) => void;
@@ -217,21 +218,17 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
       {/* Tarjeta Central */}
       <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-neutral-800/90 bg-neutral-950/95 p-6 sm:p-9 shadow-2xl backdrop-blur-2xl text-neutral-100 my-auto">
         
-        {/* Cabecera */}
-        <div className="text-center space-y-2 pb-5 border-b border-neutral-900">
-          <div className="inline-flex items-center justify-center gap-2">
-            <span className="text-3xl sm:text-4xl font-black tracking-tighter text-white uppercase select-none">
-              MBOX<span className="text-red-600">_EC</span>
-            </span>
+        {/* Cabecera con Isotipo Cinema Box Oficial */}
+        <div className="text-center space-y-3 pb-5 border-b border-neutral-900 flex flex-col items-center">
+          <CinemaBoxLogo size="lg" showTagline={true} className="justify-center" />
+
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 px-3.5 py-1 text-[11px] font-semibold text-neutral-300">
+            <Lock className="h-3 w-3 text-[#FF1A24]" />
+            <span>Acceso Seguro · Registro Único por Correo Google</span>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 px-3 py-1 text-[11px] font-semibold text-neutral-300">
-            <Lock className="h-3 w-3 text-red-500" />
-            <span>Acceso Protegido · Registro Único por Correo Google</span>
-          </div>
-
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed pt-1">
-            Para acceder a las películas, series y reproductores oficiales, es obligatorio registrarte o iniciar sesión con tu cuenta de Google.
+          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+            Mbox_Ec: Tu cine en casa. Disfruta de películas, series y transmisiones exclusivas en streaming en español.
           </p>
         </div>
 

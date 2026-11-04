@@ -1,16 +1,27 @@
 {
-  "id": "/",
-  "name": "Mbox_ec - Streaming",
-  "short_name": "Mbox_ec",
-  "description": "Tu plataforma de streaming para ver películas y series favoritas en alta definición.",
+  "name": "Mbox_Ec - Streaming en Español",
+  "short_name": "Mbox_Ec",
+  "description": "Tu cine en casa: Películas, Series y Contenido Exclusivo en vivo",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#000000",
-  "theme_color": "#000000",
-  "categories": ["entertainment", "utilities", "security"],
+  "background_color": "#08080A",
+  "theme_color": "#FF1A24",
+  "lang": "es",
+  "categories": ["entertainment", "movies", "tv"],
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/pwa-192x192.png",
       "sizes": "192x192",
@@ -21,19 +32,7 @@
       "src": "/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

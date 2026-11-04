@@ -118,8 +118,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           
           {/* Metadatos superiores */}
           <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-            <span className="text-red-500 font-bold">
-              Tendencia
+            <span className="text-[#FF1A24] font-black">
+              Mbox_Ec · Tu cine en casa
+            </span>
+            <span aria-hidden="true" className="text-neutral-700">·</span>
+            <span className="text-neutral-300 font-bold">
+              Tendencias
             </span>
             <span aria-hidden="true" className="text-neutral-700">·</span>
             <span className="capitalize text-neutral-300">
@@ -144,7 +148,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <>
                 <span aria-hidden="true" className="text-neutral-700">|</span>
                 <span className="text-xs text-neutral-400 font-mono tabular-nums">
-                  {activeItem.vote_count.toLocaleString()} votos
+                  {activeItem.vote_count.toLocaleString()} valoraciones
                 </span>
               </>
             )}
@@ -161,10 +165,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               type="button"
               tabIndex={0}
               onClick={() => onWatch(activeItem)}
-              className="inline-flex items-center gap-2.5 rounded-xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-red-950/70 hover:bg-red-500 transition-all cursor-pointer group"
+              className="inline-flex items-center gap-2.5 rounded-xl bg-[#FF1A24] px-6 py-3 text-sm font-bold text-white shadow-xl shadow-red-950/70 hover:bg-[#FF242E] transition-all cursor-pointer group"
             >
               <Play className="h-4 w-4 fill-white group-hover:scale-110 transition-transform" />
-              <span>Ver Ahora</span>
+              <span>Comenzar a ver</span>
             </button>
 
             <button
@@ -173,8 +177,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               onClick={() => onDetail(activeItem)}
               className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/90 px-5 py-3 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 transition cursor-pointer"
             >
-              <Info className="h-4 w-4 text-neutral-400" />
-              <span>Más Información</span>
+              <Info className="h-4 w-4 text-[#FF1A24]" />
+              <span>Ver ficha técnica</span>
             </button>
 
             {onToggleWatchlist && (

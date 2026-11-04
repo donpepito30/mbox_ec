@@ -1,7 +1,6 @@
-// Mbox_ec - Plataforma de Streaming de Películas y Series
-// Estilo Minimalista Netflix / Pluto TV en Negro Obsidiana, Rojo y Blanco
-// Acceso Estricto Protegido: Bloqueo Cero-Confianza con Registro Único por Correo Google
-// Control Total de Usuarios y Permanencia por el Administrador
+// Mbox_Ec - Plataforma de Streaming en Español (Películas, Series y En Vivo)
+// Identidad Oficial: Isotipo Cinema Box 3D, Rojo Neón #FF1A24, Negro Carbón #08080A
+// Acceso Protegido Cero-Confianza con Control Total de Usuarios y Panel de Administración
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -21,6 +20,7 @@ import {
   ShieldCheck,
   Shield,
   Crown,
+  Radio,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
@@ -28,6 +28,7 @@ import { Player } from './components/Player.tsx';
 import { HeroBanner } from './components/HeroBanner.tsx';
 import { GoogleAuthGate } from './components/GoogleAuthGate.tsx';
 import { AdminUsersModal } from './components/AdminUsersModal.tsx';
+import { CinemaBoxLogo } from './components/CinemaBoxLogo.tsx';
 import { MediaDetailModal } from './components/MediaDetailModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
@@ -43,7 +44,7 @@ import {
 
 export default function App() {
   const [items, setItems] = useState<MediaItem[]>([]);
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaType | 'watchlist'>('all');
+  const [selectedMediaType, setSelectedMediaType] = useState<MediaType | 'watchlist' | 'live'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -51,14 +52,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [watchlistVersion, setWatchlistVersion] = useState<number>(0);
 
-  // Modal de Panel de Control de Usuarios (Admin)
+  // Modal del Panel de Administración y Control Total
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
   // Estado de reproducción /watch/[id]
   const [watchingItem, setWatchingItem] = useState<MediaItem | null>(null);
   const [watchingDetails, setWatchingDetails] = useState<MediaDetails | null>(null);
 
-  // Modal de ficha y trailer
+  // Modal de ficha técnica y trailer
   const [selectedDetailItem, setSelectedDetailItem] = useState<MediaItem | null>(null);
 
   // Sincronizar usuario activo
@@ -67,12 +68,12 @@ export default function App() {
     setWatchlistVersion((prev) => prev + 1);
   }, []);
 
-  // MEDIDA DE SEGURIDAD: Verificación periódica de integridad de sesión criptográfica y permanencia
+  // MEDIDA DE SEGURIDAD: Verificación periódica de integridad criptográfica y estado de permanencia
   useEffect(() => {
     if (currentUser) {
       validateActiveSessionIntegrity().then((isValid) => {
         if (!isValid) {
-          console.warn('[Mbox_ec Security] Sesión inválida o revocada. Redirigiendo a Puerta de Enlace.');
+          console.warn('[Mbox_Ec Security] Sesión inválida o revocada por el Administrador.');
           refreshUserSession();
         }
       });
@@ -122,7 +123,7 @@ export default function App() {
   // Efecto de búsqueda con debounce
   useEffect(() => {
     if (!currentUser || currentUser.status !== 'ACTIVE') return;
-    if (selectedMediaType === 'watchlist') return;
+    if (selectedMediaType === 'watchlist' || selectedMediaType === 'live') return;
 
     if (!searchQuery.trim()) {
       loadContent(selectedMediaType as MediaType, '');
@@ -140,7 +141,7 @@ export default function App() {
   useEffect(() => {
     const originalOpen = window.open;
     window.open = function (url?: string | URL) {
-      console.warn('[Mbox_ec Shield] Ventana emergente no deseada interceptada:', url);
+      console.warn('[Mbox_Ec Shield] Ventana emergente no autorizada interceptada:', url);
       return null;
     };
     return () => {
@@ -199,8 +200,45 @@ export default function App() {
     setSelectedMediaType('all');
   };
 
+  // Canales en vivo curados en español
+  const liveChannels: MediaItem[] = useMemo(() => [
+    {
+      id: 99001,
+      title: 'Cine de Acción Mbox_Ec (24/7)',
+      overview: 'Canal de transmisión continua con las mejores producciones de acción y ciencia ficción en español.',
+      poster_path: '/v2NN1TMK3ifuiEyawa3ukkcSOUQ.jpg',
+      backdrop_path: '/eZ239CUp1d6OryZEBPnO2n87gMG.jpg',
+      release_date: '2026-01-01',
+      vote_average: 8.8,
+      media_type: 'movie',
+    },
+    {
+      id: 99002,
+      title: 'Mbox_Ec Series Premium',
+      overview: 'Maratones ininterrumpidas de series galardonadas y temporadas completas en alta definición.',
+      poster_path: '/7pHMZ6EsZfs2qZu0Lv2UGtTo5MU.jpg',
+      backdrop_path: '/m7eiSGHFzr584zFmetGqkqaU6BN.jpg',
+      first_air_date: '2026-01-01',
+      vote_average: 8.9,
+      media_type: 'tv',
+    },
+    {
+      id: 99003,
+      title: 'Deportes y Eventos en Directo',
+      overview: 'Transmisión exclusiva de eventos deportivos, fútbol y resúmenes de ligas internacionales.',
+      poster_path: '/8G5vQyJbWd6nS374n2R5z6m4Z1v.jpg',
+      backdrop_path: '/hZkgoQYus5vegHoetLkCJzb17zJ.jpg',
+      release_date: '2026-01-01',
+      vote_average: 8.5,
+      media_type: 'movie',
+    },
+  ], []);
+
   // Títulos para el catálogo según filtro activo
   const displayedCatalogItems = useMemo(() => {
+    if (selectedMediaType === 'live') {
+      return liveChannels;
+    }
     if (selectedMediaType === 'watchlist') {
       const list = currentUser?.watchlist || [];
       if (!searchQuery.trim()) return list;
@@ -212,7 +250,7 @@ export default function App() {
       );
     }
     return items;
-  }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, watchlistVersion]);
+  }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, liveChannels, watchlistVersion]);
 
   // Lista de pósteres para el mosaico del modal de autenticación
   const moviePosterUrls = useMemo(() => {
@@ -222,8 +260,8 @@ export default function App() {
   }, [items]);
 
   // ==========================================================================
-  // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA Y CONTROL DE PERMANENCIA)
-  // No se renderiza ningún contenido, catálogo ni reproductor si no hay sesión Google ACTIVA
+  // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA)
+  // Ningún contenido se expone si no existe una sesión verificada y ACTIVA
   // ==========================================================================
   if (!currentUser || currentUser.status !== 'ACTIVE') {
     return (
@@ -240,33 +278,32 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-[100dvh] bg-black text-neutral-100 flex flex-col font-sans selection:bg-red-600 selection:text-white"
+      className="min-h-[100dvh] bg-[#08080A] text-neutral-100 flex flex-col font-sans selection:bg-[#FF1A24] selection:text-white"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
       
-      {/* 1. Header Minimalista Estilo Netflix / Pluto TV */}
-      <header className="sticky top-0 z-40 w-full border-b border-neutral-900 bg-black/90 backdrop-blur-md">
+      {/* 1. Header Oficial Mbox_Ec con Isotipo Cinema Box 3D */}
+      <header className="sticky top-0 z-40 w-full border-b border-neutral-900 bg-[#08080A]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           
-          {/* Logo Mbox_ec */}
+          {/* Isotipo Oficial Cinema Box */}
           <div 
             onClick={() => {
               setWatchingItem(null);
               setSelectedMediaType('all');
               setSearchQuery('');
             }}
-            className="flex items-center gap-2 cursor-pointer group"
+            className="cursor-pointer group flex items-center"
+            title="Mbox_Ec: Tu cine en casa"
           >
-            <span className="text-2xl sm:text-3xl font-black tracking-tighter text-white uppercase select-none">
-              MBOX<span className="text-red-600">_EC</span>
-            </span>
+            <CinemaBoxLogo size="md" showTagline={true} />
           </div>
 
-          {/* Navegación y Acciones */}
-          <nav className="flex items-center gap-2.5 sm:gap-5 text-sm font-medium">
+          {/* Navegación Principal 100% en Español */}
+          <nav className="flex items-center gap-2 sm:gap-4 md:gap-5 text-sm font-semibold">
             <button
               onClick={() => {
                 setWatchingItem(null);
@@ -274,7 +311,7 @@ export default function App() {
               }}
               className={`transition cursor-pointer text-xs sm:text-sm ${
                 !watchingItem && selectedMediaType === 'all'
-                  ? 'text-white font-bold'
+                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -288,7 +325,7 @@ export default function App() {
               }}
               className={`transition cursor-pointer text-xs sm:text-sm ${
                 !watchingItem && selectedMediaType === 'movie'
-                  ? 'text-white font-bold'
+                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -302,14 +339,33 @@ export default function App() {
               }}
               className={`transition cursor-pointer text-xs sm:text-sm ${
                 !watchingItem && selectedMediaType === 'tv'
-                  ? 'text-white font-bold'
+                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
               Series
             </button>
 
-            {/* Acceso a Mi Lista en Header */}
+            {/* Canal En Vivo */}
+            <button
+              onClick={() => {
+                setWatchingItem(null);
+                setSelectedMediaType('live');
+              }}
+              className={`transition cursor-pointer text-xs sm:text-sm flex items-center gap-1.5 ${
+                !watchingItem && selectedMediaType === 'live'
+                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF1A24] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF1A24]" />
+              </span>
+              <span>En Vivo</span>
+            </button>
+
+            {/* Mi Lista */}
             <button
               onClick={() => {
                 setWatchingItem(null);
@@ -317,54 +373,57 @@ export default function App() {
               }}
               className={`transition cursor-pointer text-xs sm:text-sm flex items-center gap-1.5 ${
                 !watchingItem && selectedMediaType === 'watchlist'
-                  ? 'text-white font-bold'
+                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Bookmark className="h-3.5 w-3.5 text-red-500" />
-              <span>Mi Lista</span>
+              <Bookmark className="h-3.5 w-3.5 text-[#FF1A24]" />
+              <span className="hidden sm:inline">Mi Lista</span>
               {currentUser?.watchlist && currentUser.watchlist.length > 0 && (
-                <span className="ml-0.5 rounded-full bg-neutral-900 border border-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-neutral-300">
+                <span className="rounded-full bg-neutral-900 border border-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-neutral-300">
                   {currentUser.watchlist.length}
                 </span>
               )}
             </button>
 
-            {/* Botón Panel de Control (Solo visible para Administradores y Super Admin) */}
+            {/* BOTÓN OFICIAL DEL PANEL DE ADMINISTRACIÓN (SUPER ADMIN / PROPIETARIO) */}
             {isAdmin(currentUser) && (
               <button
                 onClick={() => setIsAdminModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1.5 text-xs font-bold transition cursor-pointer shadow-sm"
-                title="Panel de Control de Usuarios (Super Admin)"
+                className="flex items-center gap-1.5 rounded-xl bg-[#FF1A24]/15 hover:bg-[#FF1A24]/30 text-[#FF1A24] hover:text-white border border-[#FF1A24]/50 px-3 py-1.5 text-xs font-black transition cursor-pointer shadow-lg shadow-red-950/50"
+                title="Herramienta de Administración y Control Total de Usuarios"
               >
-                <Shield className="h-3.5 w-3.5 text-red-500" />
-                <span className="hidden sm:inline">Panel Admin</span>
+                <Crown className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+                <span className="hidden md:inline">Panel Admin</span>
               </button>
             )}
 
-            {/* Perfil de Usuario con Identidad Oficial Google */}
+            {/* Perfil del Usuario / Propietario */}
             <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
-              <div className="relative">
+              <div
+                onClick={() => {
+                  if (isAdmin(currentUser)) setIsAdminModalOpen(true);
+                }}
+                className={`relative cursor-pointer group`}
+                title={
+                  currentUser.role === 'SUPER_ADMIN'
+                    ? 'Propietario / Super Administrador (Haz clic para abrir el panel)'
+                    : `Conectado como ${currentUser.email}`
+                }
+              >
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
-                  title={`Conectado como ${currentUser.email} (${currentUser.role})`}
                 >
                   {currentUser.name.charAt(0).toUpperCase()}
                 </div>
-                {/* Insignia Google SVG Oficial o Corona de Super Admin */}
+                {/* Corona de Propietario o Check de Verificado */}
                 <div 
-                  className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-xs p-0.5"
-                  title={currentUser.role === 'SUPER_ADMIN' ? 'Super Administrador Propietario' : 'Cuenta Google Verificada'}
+                  className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#141419] border border-[#252530] shadow-xs"
                 >
                   {currentUser.role === 'SUPER_ADMIN' ? (
-                    <Crown className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                    <Crown className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
                   ) : (
-                    <svg className="h-full w-full" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                      <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                      <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                    </svg>
+                    <ShieldCheck className="h-2.5 w-2.5 text-emerald-400" />
                   )}
                 </div>
               </div>
@@ -373,16 +432,16 @@ export default function App() {
                 <span className="text-xs text-neutral-200 font-bold max-w-[120px] truncate leading-tight">
                   {currentUser.name}
                 </span>
-                <span className="text-[10px] text-neutral-500 font-mono max-w-[120px] truncate leading-tight">
+                <span className="text-[10px] text-neutral-400 font-mono max-w-[120px] truncate leading-tight">
                   {currentUser.email}
                 </span>
               </div>
 
-              {/* Botón de Cierre de Sesión Seguro */}
+              {/* Botón de Cierre de Sesión */}
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-red-400 border border-neutral-800 transition cursor-pointer"
-                title="Cerrar Sesión de Google"
+                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-[#FF1A24] border border-neutral-800 transition cursor-pointer"
+                title="Cerrar Sesión Segura"
               >
                 <LogOut className="h-3.5 w-3.5" />
               </button>
@@ -407,7 +466,7 @@ export default function App() {
                 onClick={handleBackToCatalog}
                 className="flex items-center gap-2 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900 px-4 py-2 text-xs font-bold text-neutral-200 transition cursor-pointer"
               >
-                <ArrowLeft className="h-4 w-4 text-red-500" />
+                <ArrowLeft className="h-4 w-4 text-[#FF1A24]" />
                 <span>Volver al Catálogo</span>
               </button>
 
@@ -445,10 +504,9 @@ export default function App() {
               onClose={handleBackToCatalog}
             />
 
-            {/* Grid Visual: Detalles del Título y Tráiler Oficial */}
+            {/* Detalles del Título y Tráiler Oficial */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               
-              {/* Información y Sinopsis */}
               <div className="lg:col-span-2 rounded-2xl border border-neutral-900 bg-neutral-950/80 p-5 sm:p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-900">
                   <div>
@@ -458,7 +516,7 @@ export default function App() {
                     <div className="flex items-center gap-2 text-xs text-neutral-400 mt-1">
                       <span className="capitalize">{watchingItem.media_type === 'tv' ? 'Serie' : 'Película'}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{(watchingDetails?.release_date || watchingDetails?.first_air_date || watchingItem.release_date || watchingItem.first_air_date || '').split('-')[0] || '2024'}</span>
+                      <span>{(watchingDetails?.release_date || watchingDetails?.first_air_date || watchingItem.release_date || watchingItem.first_air_date || '').split('-')[0] || '2026'}</span>
                       {watchingDetails?.runtime && (
                         <>
                           <span aria-hidden="true">·</span>
@@ -478,8 +536,8 @@ export default function App() {
                       onClick={() => setSelectedDetailItem(watchingItem)}
                       className="flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:text-white transition cursor-pointer"
                     >
-                      <Info className="h-3.5 w-3.5 text-red-500" />
-                      <span>Detalles</span>
+                      <Info className="h-3.5 w-3.5 text-[#FF1A24]" />
+                      <span>Ver ficha técnica</span>
                     </button>
                   </div>
                 </div>
@@ -510,11 +568,11 @@ export default function App() {
                 )}
               </div>
 
-              {/* Tráiler Oficial de YouTube */}
+              {/* Tráiler Oficial en Español */}
               <div className="rounded-2xl border border-neutral-900 bg-neutral-950/80 p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wide">
-                    <Play className="h-3.5 w-3.5 text-red-600 fill-red-600" />
+                    <Play className="h-3.5 w-3.5 text-[#FF1A24] fill-[#FF1A24]" />
                     <span>Tráiler Oficial</span>
                   </div>
                 </div>
@@ -554,11 +612,11 @@ export default function App() {
             </div>
           </section>
         ) : (
-          /* Vista B: Catálogo Principal Estilo Netflix / Pluto TV */
+          /* Vista B: Catálogo Principal Mbox_Ec */
           <div>
             
-            {/* Hero Banner Interactivo con Portadas de Películas */}
-            {!searchQuery.trim() && selectedMediaType !== 'watchlist' && items.length > 0 && (
+            {/* Hero Banner Interactivo */}
+            {!searchQuery.trim() && selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' && items.length > 0 && (
               <HeroBanner
                 items={items}
                 onWatch={handleWatch}
@@ -575,12 +633,12 @@ export default function App() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-neutral-900">
                 
                 {/* Categorías */}
-                <div className="flex flex-wrap items-center gap-1 p-1 bg-neutral-950 border border-neutral-900 rounded-xl text-xs self-start">
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0E0F14] border border-neutral-800 rounded-xl text-xs self-start">
                   <button
                     onClick={() => setSelectedMediaType('all')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'all'
-                        ? 'bg-red-600 text-white shadow-md shadow-red-950'
+                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
@@ -592,7 +650,7 @@ export default function App() {
                     onClick={() => setSelectedMediaType('movie')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'movie'
-                        ? 'bg-red-600 text-white shadow-md shadow-red-950'
+                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
@@ -604,7 +662,7 @@ export default function App() {
                     onClick={() => setSelectedMediaType('tv')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'tv'
-                        ? 'bg-red-600 text-white shadow-md shadow-red-950'
+                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
@@ -613,10 +671,22 @@ export default function App() {
                   </button>
 
                   <button
+                    onClick={() => setSelectedMediaType('live')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                      selectedMediaType === 'live'
+                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Radio className="h-3.5 w-3.5 text-red-500" />
+                    <span>En Vivo</span>
+                  </button>
+
+                  <button
                     onClick={() => setSelectedMediaType('watchlist')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'watchlist'
-                        ? 'bg-red-600 text-white shadow-md shadow-red-950'
+                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
@@ -632,12 +702,8 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={
-                      selectedMediaType === 'watchlist'
-                        ? 'Buscar en tu lista guardada...'
-                        : 'Buscar películas o series...'
-                    }
-                    className="w-full rounded-xl border border-neutral-800 bg-neutral-950 pl-9 pr-8 py-2 text-xs text-white placeholder-neutral-500 focus:border-red-600 focus:outline-none transition"
+                    placeholder="Buscar películas o series..."
+                    className="w-full rounded-xl border border-neutral-800 bg-[#0E0F14] pl-9 pr-8 py-2 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
                   />
                   {searchQuery && (
                     <button
@@ -655,33 +721,35 @@ export default function App() {
               <div className="flex items-center justify-between pb-1">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                    {selectedMediaType === 'watchlist'
+                    {selectedMediaType === 'live'
+                      ? 'Transmisiones y Canales En Vivo'
+                      : selectedMediaType === 'watchlist'
                       ? 'Mi Lista Personal'
                       : searchQuery.trim()
                       ? `Resultados para "${searchQuery}"`
-                      : 'Estrenos y Series Populares'}
+                      : 'Estrenos, Series y Tendencias'}
                   </h2>
-                  {selectedMediaType === 'watchlist' && (
-                    <p className="text-xs text-neutral-400 mt-1">
-                      Títulos guardados para {currentUser.name} ({currentUser.email})
-                    </p>
-                  )}
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {selectedMediaType === 'live'
+                      ? 'Canales 24/7 de cine, series y eventos en español'
+                      : 'Mbox_Ec: Tu cine en casa'}
+                  </p>
                 </div>
 
-                {selectedMediaType !== 'watchlist' && (
+                {selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' && (
                   <button
                     onClick={() => loadContent(selectedMediaType as MediaType, searchQuery)}
                     disabled={isLoading}
                     className="hidden sm:flex items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-300 hover:text-white transition cursor-pointer"
                   >
-                    <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
-                    <span>Actualizar</span>
+                    <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin text-[#FF1A24]' : ''}`} />
+                    <span>Actualizar catálogo</span>
                   </button>
                 )}
               </div>
 
-              {/* Catálogo en Grid Estilo Netflix / Pluto TV */}
-              {isLoading && selectedMediaType !== 'watchlist' ? (
+              {/* Catálogo en Grid */}
+              {isLoading && selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
                   {Array.from({ length: 10 }).map((_, idx) => (
                     <div
@@ -692,33 +760,15 @@ export default function App() {
                 </div>
               ) : displayedCatalogItems.length === 0 ? (
                 <div className="py-20 text-center text-neutral-500 space-y-3">
-                  {selectedMediaType === 'watchlist' ? (
-                    <>
-                      <Bookmark className="h-12 w-12 mx-auto opacity-30 text-red-500" />
-                      <p className="text-sm font-semibold text-neutral-300">Tu lista está vacía</p>
-                      <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                        Explora el catálogo y pulsa el botón de guardar en cualquier película o serie para tenerla a mano.
-                      </p>
-                      <button
-                        onClick={() => setSelectedMediaType('all')}
-                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500 transition cursor-pointer"
-                      >
-                        Explorar Catálogo
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Film className="h-12 w-12 mx-auto opacity-30 text-neutral-400" />
-                      <p className="text-sm font-semibold text-neutral-300">No se encontraron títulos disponibles</p>
-                      <p className="text-xs text-neutral-500">Prueba con otra búsqueda o filtro</p>
-                    </>
-                  )}
+                  <Film className="h-12 w-12 mx-auto opacity-30 text-neutral-400" />
+                  <p className="text-sm font-semibold text-neutral-300">No se encontraron títulos disponibles</p>
+                  <p className="text-xs text-neutral-500">Prueba con otra búsqueda o filtro</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
                   {displayedCatalogItems.map((item) => {
                     const title = item.title || item.name || 'Título';
-                    const year = (item.release_date || item.first_air_date || '').split('-')[0] || '—';
+                    const year = (item.release_date || item.first_air_date || '').split('-')[0] || '2026';
                     const rating = Number(item.vote_average || 0).toFixed(1);
                     const isTv = item.media_type === 'tv' || (!item.title && Boolean(item.name));
                     const posterUrl = getImageUrl(item.poster_path, 'w500');
@@ -735,9 +785,9 @@ export default function App() {
                             handleWatch(item);
                           }
                         }}
-                        className="group relative flex flex-col overflow-hidden rounded-xl border border-neutral-900 bg-neutral-950 transition-all duration-300 hover:-translate-y-1.5 hover:border-neutral-700 hover:shadow-2xl hover:shadow-black cursor-pointer focus:outline-none focus:ring-4 focus:ring-red-600 focus:scale-[1.03]"
+                        className="group relative flex flex-col overflow-hidden rounded-xl border border-neutral-900 bg-[#0E0F14] transition-all duration-300 hover:-translate-y-1.5 hover:border-neutral-700 hover:shadow-2xl hover:shadow-black cursor-pointer focus:outline-none focus:ring-4 focus:ring-[#FF1A24] focus:scale-[1.03]"
                       >
-                        {/* Póster de TMDb en Aspecto 2:3 */}
+                        {/* Póster en Aspecto 2:3 */}
                         <div className="relative aspect-[2/3] w-full overflow-hidden bg-black">
                           <img
                             src={posterUrl}
@@ -749,7 +799,6 @@ export default function App() {
                             className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                           />
 
-                          {/* Gradiente en la base del póster */}
                           <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black via-black/60 to-transparent" />
 
                           {/* Calificación */}
@@ -758,7 +807,7 @@ export default function App() {
                             <span>{rating}</span>
                           </div>
 
-                          {/* Botón de guardar rápido en la esquina superior izquierda */}
+                          {/* Botón de guardar rápido */}
                           <button
                             type="button"
                             tabIndex={0}
@@ -768,7 +817,7 @@ export default function App() {
                             }}
                             className={`absolute top-2.5 left-2.5 p-1.5 rounded-lg border backdrop-blur-md transition cursor-pointer ${
                               saved
-                                ? 'bg-red-600/90 border-red-500 text-white'
+                                ? 'bg-[#FF1A24] border-red-500 text-white'
                                 : 'bg-black/70 border-neutral-800 text-neutral-300 hover:text-white opacity-0 group-hover:opacity-100'
                             }`}
                             title={saved ? 'En Mi Lista' : 'Guardar en Mi Lista'}
@@ -780,9 +829,9 @@ export default function App() {
                             )}
                           </button>
 
-                          {/* Botón flotante de reproducción en hover estilo Netflix */}
+                          {/* Botón de reproducción flotante */}
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px] pointer-events-none">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-xl shadow-red-950 scale-90 group-hover:scale-100 transition-transform">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#FF1A24] text-white shadow-xl shadow-red-950 scale-90 group-hover:scale-100 transition-transform">
                               <Play className="h-5 w-5 fill-white ml-0.5" />
                             </div>
                           </div>
@@ -790,7 +839,7 @@ export default function App() {
 
                         {/* Metadatos y Título */}
                         <div className="flex flex-1 flex-col justify-between p-3 space-y-1">
-                          <h3 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red-500 transition-colors">
+                          <h3 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-[#FF1A24] transition-colors">
                             {title}
                           </h3>
 
@@ -814,7 +863,7 @@ export default function App() {
 
       </main>
 
-      {/* Modal del Panel de Control de Usuarios (Super Admin) */}
+      {/* MODAL DEL PANEL DE ADMINISTRACIÓN Y CONTROL TOTAL */}
       {isAdminModalOpen && (
         <AdminUsersModal
           isOpen={isAdminModalOpen}
@@ -822,6 +871,23 @@ export default function App() {
           currentUser={currentUser}
           onUserUpdated={refreshUserSession}
         />
+      )}
+
+      {/* BOTÓN FLOTANTE DE ACCESO RÁPIDO AL PANEL DE ADMINISTRACIÓN (SOLO PROPIETARIO) */}
+      {isAdmin(currentUser) && (
+        <aside aria-label="Herramienta de administración" className="fixed bottom-5 left-5 z-40 animate-in fade-in">
+          <button
+            onClick={() => setIsAdminModalOpen(true)}
+            className="flex items-center gap-2 rounded-2xl bg-[#0E0F14]/95 hover:bg-neutral-900 text-white border border-[#FF1A24]/60 px-4 py-2.5 shadow-2xl shadow-black backdrop-blur-md transition-all hover:scale-105 cursor-pointer text-xs font-bold"
+            title="Abrir Panel de Control Total de Usuarios (Super Admin)"
+          >
+            <Crown className="h-4 w-4 text-amber-400 fill-amber-400" />
+            <span>Herramienta de Administración</span>
+            <span className="rounded-full bg-[#FF1A24] px-1.5 py-0.5 text-[9px] text-white font-mono uppercase">
+              Propietario
+            </span>
+          </button>
+        </aside>
       )}
 
       {/* Modal de Ficha Técnica */}
@@ -833,21 +899,19 @@ export default function App() {
         />
       )}
 
-      {/* Footer Minimalista Mbox_ec con Insignia de Protección */}
-      <footer className="border-t border-neutral-900 bg-black py-8 text-neutral-500 text-xs text-center">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-white tracking-wider">
-              MBOX<span className="text-red-600">_EC</span>
-            </span>
-            <span className="text-neutral-600">·</span>
-            <span>Streaming Protegido con Google Auth</span>
+      {/* Footer Oficial Mbox_Ec */}
+      <footer className="border-t border-neutral-900 bg-[#08080A] py-10 text-neutral-500 text-xs text-center">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <CinemaBoxLogo size="sm" showTagline={true} />
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-neutral-400">
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <span>Control de Permanencia Activo (Super Admin: jj863620@gmail.com)</span>
+            </div>
+            <span className="hidden sm:inline text-neutral-700">·</span>
+            <p>© 2026 Mbox_Ec · Tu cine en casa. Todos los derechos reservados.</p>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-neutral-400">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-            <span>Control de Permanencia Activo (Super Admin: jj863620@gmail.com)</span>
-          </div>
-          <p>© {new Date().getFullYear()} Mbox_ec · Todos los derechos reservados.</p>
         </div>
       </footer>
 
