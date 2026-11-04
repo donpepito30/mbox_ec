@@ -1,4 +1,4 @@
-// Mbox_Ec - Plataforma de Streaming en Español (Películas, Series y En Vivo)
+// Mbox_Ec - Plataforma de Streaming en Español (Películas y Series)
 // Identidad Oficial: Isotipo Cinema Box 3D, Rojo Neón #FF1A24, Negro Carbón #08080A
 // Acceso Protegido Cero-Confianza con Control Total de Usuarios y Panel de Administración
 'use client';
@@ -44,7 +44,7 @@ import {
 
 export default function App() {
   const [items, setItems] = useState<MediaItem[]>([]);
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaType | 'watchlist' | 'live'>('all');
+  const [selectedMediaType, setSelectedMediaType] = useState<MediaType | 'watchlist'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -123,7 +123,7 @@ export default function App() {
   // Efecto de búsqueda con debounce
   useEffect(() => {
     if (!currentUser || currentUser.status !== 'ACTIVE') return;
-    if (selectedMediaType === 'watchlist' || selectedMediaType === 'live') return;
+    if (selectedMediaType === 'watchlist') return;
 
     if (!searchQuery.trim()) {
       loadContent(selectedMediaType as MediaType, '');
@@ -200,45 +200,8 @@ export default function App() {
     setSelectedMediaType('all');
   };
 
-  // Canales en vivo curados en español
-  const liveChannels: MediaItem[] = useMemo(() => [
-    {
-      id: 99001,
-      title: 'Cine de Acción Mbox_Ec (24/7)',
-      overview: 'Canal de transmisión continua con las mejores producciones de acción y ciencia ficción en español.',
-      poster_path: '/v2NN1TMK3ifuiEyawa3ukkcSOUQ.jpg',
-      backdrop_path: '/eZ239CUp1d6OryZEBPnO2n87gMG.jpg',
-      release_date: '2026-01-01',
-      vote_average: 8.8,
-      media_type: 'movie',
-    },
-    {
-      id: 99002,
-      title: 'Mbox_Ec Series Premium',
-      overview: 'Maratones ininterrumpidas de series galardonadas y temporadas completas en alta definición.',
-      poster_path: '/7pHMZ6EsZfs2qZu0Lv2UGtTo5MU.jpg',
-      backdrop_path: '/m7eiSGHFzr584zFmetGqkqaU6BN.jpg',
-      first_air_date: '2026-01-01',
-      vote_average: 8.9,
-      media_type: 'tv',
-    },
-    {
-      id: 99003,
-      title: 'Deportes y Eventos en Directo',
-      overview: 'Transmisión exclusiva de eventos deportivos, fútbol y resúmenes de ligas internacionales.',
-      poster_path: '/8G5vQyJbWd6nS374n2R5z6m4Z1v.jpg',
-      backdrop_path: '/hZkgoQYus5vegHoetLkCJzb17zJ.jpg',
-      release_date: '2026-01-01',
-      vote_average: 8.5,
-      media_type: 'movie',
-    },
-  ], []);
-
   // Títulos para el catálogo según filtro activo
   const displayedCatalogItems = useMemo(() => {
-    if (selectedMediaType === 'live') {
-      return liveChannels;
-    }
     if (selectedMediaType === 'watchlist') {
       const list = currentUser?.watchlist || [];
       if (!searchQuery.trim()) return list;
@@ -250,7 +213,7 @@ export default function App() {
       );
     }
     return items;
-  }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, liveChannels, watchlistVersion]);
+  }, [selectedMediaType, currentUser?.watchlist, searchQuery, items, watchlistVersion]);
 
   // Lista de pósteres para el mosaico del modal de autenticación
   const moviePosterUrls = useMemo(() => {
@@ -271,7 +234,6 @@ export default function App() {
           loadContent('all', '');
         }}
         moviePosters={moviePosterUrls}
-        initialEmail="jj863620@gmail.com"
       />
     );
   }
@@ -299,7 +261,7 @@ export default function App() {
             className="cursor-pointer group flex items-center"
             title="Mbox_Ec: Tu cine en casa"
           >
-            <CinemaBoxLogo size="md" showTagline={true} />
+            <CinemaBoxLogo size="md" />
           </div>
 
           {/* Navegación Principal 100% en Español */}
@@ -344,25 +306,6 @@ export default function App() {
               }`}
             >
               Series
-            </button>
-
-            {/* Canal En Vivo */}
-            <button
-              onClick={() => {
-                setWatchingItem(null);
-                setSelectedMediaType('live');
-              }}
-              className={`transition cursor-pointer text-xs sm:text-sm flex items-center gap-1.5 ${
-                !watchingItem && selectedMediaType === 'live'
-                  ? 'text-white font-black drop-shadow-[0_0_8px_rgba(255,26,36,0.6)]'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF1A24] opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF1A24]" />
-              </span>
-              <span>En Vivo</span>
             </button>
 
             {/* Mi Lista */}
@@ -616,7 +559,7 @@ export default function App() {
           <div>
             
             {/* Hero Banner Interactivo */}
-            {!searchQuery.trim() && selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' && items.length > 0 && (
+            {!searchQuery.trim() && selectedMediaType !== 'watchlist' && items.length > 0 && (
               <HeroBanner
                 items={items}
                 onWatch={handleWatch}
@@ -671,18 +614,6 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => setSelectedMediaType('live')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                      selectedMediaType === 'live'
-                        ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    <Radio className="h-3.5 w-3.5 text-red-500" />
-                    <span>En Vivo</span>
-                  </button>
-
-                  <button
                     onClick={() => setSelectedMediaType('watchlist')}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
                       selectedMediaType === 'watchlist'
@@ -721,22 +652,18 @@ export default function App() {
               <div className="flex items-center justify-between pb-1">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                    {selectedMediaType === 'live'
-                      ? 'Transmisiones y Canales En Vivo'
-                      : selectedMediaType === 'watchlist'
+                    {selectedMediaType === 'watchlist'
                       ? 'Mi Lista Personal'
                       : searchQuery.trim()
                       ? `Resultados para "${searchQuery}"`
                       : 'Estrenos, Series y Tendencias'}
                   </h2>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    {selectedMediaType === 'live'
-                      ? 'Canales 24/7 de cine, series y eventos en español'
-                      : 'Mbox_Ec: Tu cine en casa'}
+                    Mbox_Ec: Tu cine en casa
                   </p>
                 </div>
 
-                {selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' && (
+                {selectedMediaType !== 'watchlist' && (
                   <button
                     onClick={() => loadContent(selectedMediaType as MediaType, searchQuery)}
                     disabled={isLoading}
@@ -749,7 +676,7 @@ export default function App() {
               </div>
 
               {/* Catálogo en Grid */}
-              {isLoading && selectedMediaType !== 'watchlist' && selectedMediaType !== 'live' ? (
+              {isLoading && selectedMediaType !== 'watchlist' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
                   {Array.from({ length: 10 }).map((_, idx) => (
                     <div
@@ -902,12 +829,12 @@ export default function App() {
       {/* Footer Oficial Mbox_Ec */}
       <footer className="border-t border-neutral-900 bg-[#08080A] py-10 text-neutral-500 text-xs text-center">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <CinemaBoxLogo size="sm" showTagline={true} />
+          <CinemaBoxLogo size="sm" />
 
           <div className="flex flex-col sm:flex-row items-center gap-4 text-neutral-400">
             <div className="flex items-center gap-1.5 text-[11px]">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span>Control de Permanencia Activo (Super Admin: jj863620@gmail.com)</span>
+              <span>Control de Acceso y Permanencia Activo</span>
             </div>
             <span className="hidden sm:inline text-neutral-700">·</span>
             <p>© 2026 Mbox_Ec · Tu cine en casa. Todos los derechos reservados.</p>

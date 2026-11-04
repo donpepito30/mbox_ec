@@ -37,6 +37,8 @@ const SECRET_SEED_KEY = 'mbox_client_entropy_salt_v1';
 
 // Super Administrador del Sistema
 export const SUPER_ADMIN_EMAILS = ['jj863620@gmail.com'];
+export const MASTER_PIN_KEY = 'mbox_super_admin_pin_v2';
+export const DEFAULT_MASTER_PIN = '863620';
 
 // Duración de la sesión: 7 días en milisegundos
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -112,6 +114,32 @@ export function isAdmin(user?: User | null): boolean {
 }
 
 /**
+ * Obtiene el PIN Maestro de Seguridad para acceso del Super Administrador
+ */
+export function getMasterAdminPin(): string {
+  try {
+    return localStorage.getItem(MASTER_PIN_KEY) || DEFAULT_MASTER_PIN;
+  } catch {
+    return DEFAULT_MASTER_PIN;
+  }
+}
+
+/**
+ * Modifica el PIN Maestro de Seguridad (Solo Super Administrador)
+ */
+export function setMasterAdminPin(newPin: string): boolean {
+  if (!newPin || newPin.trim().length < 4) {
+    throw new Error('El PIN debe tener al menos 4 caracteres.');
+  }
+  try {
+    localStorage.setItem(MASTER_PIN_KEY, newPin.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Obtiene la configuración global de políticas de acceso
  */
 export function getAuthSettings(): AuthSettings {
@@ -119,7 +147,7 @@ export function getAuthSettings(): AuthSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) {
       const defaultSettings: AuthSettings = {
-        requireAdminApproval: false, // Por defecto permitir registro, con control posterior de suspensión
+        requireAdminApproval: true, // Por defecto exige aprobación del dueño para control total
         maintenanceMode: false,
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaultSettings));
@@ -127,7 +155,7 @@ export function getAuthSettings(): AuthSettings {
     }
     return JSON.parse(raw);
   } catch {
-    return { requireAdminApproval: false, maintenanceMode: false };
+    return { requireAdminApproval: true, maintenanceMode: false };
   }
 }
 
@@ -537,7 +565,8 @@ export async function validateActiveSessionIntegrity(): Promise<boolean> {
 export async function authenticateWithGoogle(
   email: string,
   providedName?: string,
-  picture?: string
+  picture?: string,
+  adminPin?: string
 ): Promise<User> {
   const rateLimit = checkRateLimit();
   if (rateLimit.isBlocked) {
@@ -553,11 +582,24 @@ export async function authenticateWithGoogle(
   }
 
   const cleanEmail = validation.cleanEmail;
+  const isOwner = isSuperAdmin(cleanEmail);
+
+  // CONTROL DE SEGURIDAD CRÍTICO DEL PROPIETARIO:
+  // Si alguien ingresa el correo del Super Admin, DEBE proporcionar el PIN Maestro de Seguridad.
+  // Esto previene que terceros en la web compartida usurpen la cuenta del propietario.
+  if (isOwner) {
+    const expectedPin = getMasterAdminPin();
+    if (!adminPin || adminPin.trim() !== expectedPin) {
+      recordFailedAttempt();
+      throw new Error(
+        'Acceso restringido: Esta cuenta es del Propietario. Ingresa el PIN Maestro de Seguridad para autenticarte.'
+      );
+    }
+  }
+
   const users = getStoredUsers();
   const existingUser = users[cleanEmail];
   const settings = getAuthSettings();
-
-  const isOwner = isSuperAdmin(cleanEmail);
 
   // Si la cuenta existe y está suspendida
   if (existingUser && existingUser.status === 'SUSPENDED' && !isOwner) {

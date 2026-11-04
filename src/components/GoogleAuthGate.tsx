@@ -1,23 +1,21 @@
 // Mbox_ec - Puerta de Enlace de Autenticación Exclusiva con Google (Content Gate)
-// Bloquea el 100% del catálogo y reproducción hasta completar el registro con correo de Google
-// Incluye control de permanencia: estados Activo, Pendiente de Aprobación y Suspendido
+// Minimalista, estilo Netflix: Únicamente el logo, sin frases ni textos excesivos
+// Máxima Seguridad: El correo del dueño NO está predeterminado, se exige PIN Maestro para la cuenta de Propietario
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import {
-  ShieldCheck,
   Lock,
   Mail,
   AlertCircle,
   ArrowRight,
-  Shield,
   Clock,
   KeyRound,
   CheckCircle2,
-  Sparkles,
   RefreshCw,
   Ban,
-  UserCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   authenticateWithGoogle,
@@ -25,6 +23,7 @@ import {
   validateGoogleEmail,
   getCurrentUser,
   logoutUser,
+  isSuperAdmin,
   User,
 } from '../services/auth.ts';
 import { CinemaBoxLogo } from './CinemaBoxLogo.tsx';
@@ -32,25 +31,27 @@ import { CinemaBoxLogo } from './CinemaBoxLogo.tsx';
 interface GoogleAuthGateProps {
   onSuccess: (user: User) => void;
   moviePosters?: string[];
-  initialEmail?: string;
 }
 
 export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
   onSuccess,
   moviePosters = [],
-  initialEmail = 'jj863620@gmail.com',
 }) => {
   const [googleEmail, setGoogleEmail] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
+  const [adminPin, setAdminPin] = useState<string>('');
+  const [showPin, setShowPin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
-  const [showSecurityDetails, setShowSecurityDetails] = useState<boolean>(false);
 
   // Estados de permanencia bloqueante
   const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [suspendedUser, setSuspendedUser] = useState<User | null>(null);
+
+  // Detecta si el correo ingresado es la cuenta de Super Admin
+  const isOwnerEmail = isSuperAdmin(googleEmail);
 
   // Verificar si ya hay una sesión en espera o suspendida
   useEffect(() => {
@@ -72,7 +73,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     }
   }, []);
 
-  // Temporizador de cuenta regresiva para enfriamiento de seguridad
+  // Temporizador de enfriamiento ante fuerza bruta
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
     const interval = setInterval(() => {
@@ -88,16 +89,22 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     return () => clearInterval(interval);
   }, [cooldownSeconds]);
 
-  const handleAuthenticate = async (emailToAuth: string, nameToAuth?: string) => {
+  const handleAuthenticate = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
     setPendingUser(null);
     setSuspendedUser(null);
 
-    // Validación preventiva en cliente
-    const validation = validateGoogleEmail(emailToAuth);
+    const validation = validateGoogleEmail(googleEmail);
     if (!validation.isValid) {
-      setErrorMessage(validation.error || 'Solo se permiten correos de Google (@gmail.com).');
+      setErrorMessage(validation.error || 'Solo se permiten correos oficiales de Google (@gmail.com).');
+      return;
+    }
+
+    // Si es la cuenta del propietario, validar que haya ingresado el PIN
+    if (isOwnerEmail && !adminPin.trim()) {
+      setErrorMessage('Esta es la cuenta del Propietario. Ingresa tu PIN de Seguridad.');
       return;
     }
 
@@ -105,27 +112,29 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     try {
       const user = await authenticateWithGoogle(
         validation.cleanEmail,
-        nameToAuth || userName,
-        undefined
+        userName,
+        undefined,
+        isOwnerEmail ? adminPin.trim() : undefined
       );
 
-      // Evaluar estado de permanencia asignado
+      // Si el usuario requiere aprobación del administrador
       if (user.status === 'PENDING') {
         setPendingUser(user);
-        setSuccessMessage('Cuenta registrada. En espera de aprobación por el Administrador.');
+        setSuccessMessage('Solicitud registrada. En espera de autorización del Administrador.');
         return;
       }
 
+      // Si el usuario está suspendido
       if (user.status === 'SUSPENDED') {
         setSuspendedUser(user);
-        setErrorMessage('Esta cuenta se encuentra suspendida.');
+        setErrorMessage('Esta cuenta se encuentra suspendida por el Administrador.');
         return;
       }
 
-      setSuccessMessage(`¡Identidad Google verificada! Bienvenido, ${user.name}`);
+      setSuccessMessage(`Bienvenido, ${user.name}`);
       setTimeout(() => {
         onSuccess(user);
-      }, 700);
+      }, 500);
     } catch (err: any) {
       const rate = checkRateLimit();
       if (rate.isBlocked) {
@@ -142,10 +151,10 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     const active = getCurrentUser();
     if (active && active.status === 'ACTIVE') {
       setPendingUser(null);
-      setSuccessMessage('¡Tu cuenta ha sido aprobada por el Administrador!');
+      setSuccessMessage('¡Tu cuenta ha sido aprobada!');
       setTimeout(() => {
         onSuccess(active);
-      }, 600);
+      }, 500);
     } else {
       setErrorMessage('Tu cuenta aún está pendiente de aprobación por el Administrador.');
     }
@@ -155,16 +164,12 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     logoutUser();
     setPendingUser(null);
     setSuspendedUser(null);
+    setGoogleEmail('');
+    setAdminPin('');
     setErrorMessage(null);
     setSuccessMessage(null);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleAuthenticate(googleEmail, userName);
-  };
-
-  // Mosaico de pósteres de películas para el fondo cinemático
   const defaultPosters = [
     'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=80',
@@ -179,64 +184,54 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
   const postersToDisplay = moviePosters.length > 0 ? moviePosters.slice(0, 16) : defaultPosters;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 bg-black min-h-[100dvh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 bg-[#08080A] min-h-[100dvh]">
       
-      {/* Fondo Cinemático: Mosaico de Portadas estilo Netflix */}
-      <div className="absolute inset-0 z-0 overflow-hidden opacity-25 pointer-events-none select-none">
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 -rotate-6 scale-110 -translate-y-12">
+      {/* Fondo Cinemático Minimalista */}
+      <div className="absolute inset-0 z-0 overflow-hidden opacity-20 pointer-events-none select-none">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 -rotate-3 scale-105">
           {postersToDisplay.map((poster, index) => (
             <div
-              key={`g1-${index}`}
+              key={`p1-${index}`}
               className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800"
             >
               <img
                 src={poster}
-                alt="Portada"
+                alt=""
                 loading="lazy"
-                className="h-full w-full object-cover filter brightness-75"
+                className="h-full w-full object-cover filter brightness-70"
               />
             </div>
           ))}
           {postersToDisplay.map((poster, index) => (
             <div
-              key={`g2-${index}`}
+              key={`p2-${index}`}
               className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800"
             >
               <img
                 src={poster}
-                alt="Portada"
+                alt=""
                 loading="lazy"
-                className="h-full w-full object-cover filter brightness-75"
+                className="h-full w-full object-cover filter brightness-70"
               />
             </div>
           ))}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/85 to-black/70" />
-        <div className="absolute inset-0 bg-radial from-transparent via-black/80 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#08080A] via-[#08080A]/90 to-[#08080A]/80" />
       </div>
 
-      {/* Tarjeta Central */}
-      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-neutral-800/90 bg-neutral-950/95 p-6 sm:p-9 shadow-2xl backdrop-blur-2xl text-neutral-100 my-auto">
+      {/* Tarjeta de Autenticación Minimalista */}
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-neutral-800/80 bg-neutral-950/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-neutral-100 my-auto">
         
-        {/* Cabecera con Isotipo Cinema Box Oficial */}
-        <div className="text-center space-y-3 pb-5 border-b border-neutral-900 flex flex-col items-center">
-          <CinemaBoxLogo size="lg" showTagline={true} className="justify-center" />
-
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 px-3.5 py-1 text-[11px] font-semibold text-neutral-300">
-            <Lock className="h-3 w-3 text-[#FF1A24]" />
-            <span>Acceso Seguro · Registro Único por Correo Google</span>
-          </div>
-
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-            Mbox_Ec: Tu cine en casa. Disfruta de películas, series y transmisiones exclusivas en streaming en español.
-          </p>
+        {/* Únicamente el Logo Oficial Cinema Box Mbox_Ec */}
+        <div className="text-center pb-6 border-b border-neutral-900 flex flex-col items-center">
+          <CinemaBoxLogo size="lg" className="justify-center" />
         </div>
 
-        {/* CASO A: CUENTA PENDIENTE DE APROBACIÓN POR EL ADMINISTRADOR */}
+        {/* CASO A: CUENTA PENDIENTE DE APROBACIÓN */}
         {pendingUser ? (
           <div className="mt-6 space-y-4 text-center animate-in fade-in">
-            <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-              <Clock className="h-7 w-7" />
+            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+              <Clock className="h-6 w-6" />
             </div>
 
             <div className="space-y-1">
@@ -244,17 +239,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 Cuenta en Espera de Aprobación
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
-                Tu cuenta de Google (<span className="text-white font-mono">{pendingUser.email}</span>) fue registrada con éxito, pero requiere autorización del Administrador para acceder.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-3.5 text-xs text-amber-200 text-left space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <ShieldCheck className="h-4 w-4 text-amber-400" />
-                <span>Control de Permanencia Activado</span>
-              </div>
-              <p className="text-[11px] text-amber-300/80">
-                El Administrador (jj863620@gmail.com) ha sido notificado. Una vez que apruebe tu solicitud en el panel de control, podrás disfrutar de todo el catálogo.
+                Tu cuenta (<span className="text-white font-mono">{pendingUser.email}</span>) fue registrada. El Administrador debe autorizar tu acceso antes de ingresar.
               </p>
             </div>
 
@@ -265,7 +250,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-3 transition cursor-pointer"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span>Comprobar si ya fui aprobado</span>
+                <span>Comprobar Estado</span>
               </button>
 
               <button
@@ -273,32 +258,29 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 onClick={handleResetSession}
                 className="text-xs text-neutral-400 hover:text-white transition py-1 cursor-pointer"
               >
-                Ingresar con otra cuenta de Google
+                Ingresar con otra cuenta
               </button>
             </div>
           </div>
         ) : suspendedUser ? (
-          /* CASO B: CUENTA SUSPENDIDA / ACCESO REVOCADO */
+          /* CASO B: CUENTA SUSPENDIDA */
           <div className="mt-6 space-y-4 text-center animate-in fade-in">
-            <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500">
-              <Ban className="h-7 w-7" />
+            <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500">
+              <Ban className="h-6 w-6" />
             </div>
 
             <div className="space-y-1">
               <h3 className="text-base font-bold text-white">
-                Acceso Suspendido por el Administrador
+                Acceso Suspendido
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
-                La cuenta de Google (<span className="text-white font-mono">{suspendedUser.email}</span>) ha sido suspendida por el Administrador de Mbox_ec.
+                La cuenta (<span className="text-white font-mono">{suspendedUser.email}</span>) no tiene permisos de acceso activos.
               </p>
-            </div>
-
-            <div className="rounded-2xl border border-red-900/40 bg-red-950/20 p-3.5 text-xs text-red-200 text-left">
-              <p className="text-[11px]">
-                {suspendedUser.statusReason
-                  ? `Motivo: ${suspendedUser.statusReason}`
-                  : 'Tu permanencia ha sido revocada temporal o definitivamente por políticas de uso de la plataforma.'}
-              </p>
+              {suspendedUser.statusReason && (
+                <p className="text-xs text-red-400 pt-1 font-medium">
+                  Motivo: {suspendedUser.statusReason}
+                </p>
+              )}
             </div>
 
             <button
@@ -306,186 +288,128 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
               onClick={handleResetSession}
               className="w-full rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold text-xs py-3 transition cursor-pointer"
             >
-              Cerrar e intentar con otra cuenta
+              Intentar con otra cuenta
             </button>
           </div>
         ) : (
-          /* CASO C: FORMULARIO NORMAL DE REGISTRO E INICIO CON GOOGLE */
-          <>
-            {/* Notificaciones de Error / Cooldown */}
+          /* CASO C: FORMULARIO LIMPIO DE ACCESO */
+          <form onSubmit={handleAuthenticate} className="mt-6 space-y-4">
+            
+            {/* Mensaje de Error */}
             {errorMessage && (
-              <div className="mt-4 flex items-start gap-2.5 p-3.5 rounded-xl bg-red-950/80 border border-red-800/80 text-xs text-red-200 animate-in fade-in">
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/80 border border-red-800 text-xs text-red-200 animate-in fade-in">
                 <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold">{errorMessage}</p>
                   {cooldownSeconds > 0 && (
                     <p className="text-[11px] text-red-300 mt-1">
-                      Espera <span className="font-mono font-bold text-white">{cooldownSeconds}s</span> antes del próximo intento.
+                      Espera <span className="font-mono font-bold text-white">{cooldownSeconds}s</span> antes de intentar nuevamente.
                     </p>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Notificación de Éxito */}
+            {/* Mensaje de Éxito */}
             {successMessage && (
-              <div className="mt-4 flex items-center gap-2.5 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-xs text-emerald-200 animate-in fade-in">
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-200 animate-in fade-in">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                 <span className="font-semibold">{successMessage}</span>
               </div>
             )}
 
-            {/* Botón Principal: Autenticación con Google (1-Clic Oficial) */}
-            <div className="mt-6 space-y-3">
-              
-              <button
-                type="button"
-                disabled={isLoading || cooldownSeconds > 0}
-                onClick={() => handleAuthenticate(initialEmail, 'Propietario Mbox')}
-                className="w-full flex items-center justify-center gap-3 rounded-2xl bg-white text-neutral-900 hover:bg-neutral-100 py-3.5 px-4 font-bold text-sm shadow-xl transition-all cursor-pointer group disabled:opacity-50"
-              >
-                {/* Logo Oficial de Google SVG */}
-                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span className="truncate">
-                  {isLoading ? 'Verificando con Google...' : `Continuar con Google (${initialEmail})`}
-                </span>
-              </button>
-
-              {/* Separador */}
-              <div className="relative flex items-center justify-center py-2">
-                <div className="w-full border-t border-neutral-900" />
-                <span className="absolute bg-neutral-950 px-3 text-[11px] uppercase tracking-wider text-neutral-500 font-semibold">
-                  O registrar otra cuenta @gmail.com
-                </span>
+            {/* Campo Correo de Google */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                <span>Correo de Google</span>
+                <span className="text-[10px] text-neutral-500 font-mono">@gmail.com</span>
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-3 h-4 w-4 text-neutral-500" />
+                <input
+                  type="email"
+                  required
+                  value={googleEmail}
+                  onChange={(e) => {
+                    setGoogleEmail(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="tu.correo@gmail.com"
+                  autoComplete="email"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
+                />
               </div>
+            </div>
 
-              {/* Formulario para ingresar cualquier otra cuenta de Google */}
-              <form onSubmit={handleFormSubmit} className="space-y-3.5">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-neutral-300 flex items-center justify-between">
-                    <span>Tu Correo Google</span>
-                    <span className="text-[10px] text-red-400 font-mono">Solo @gmail.com</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-3 h-4 w-4 text-neutral-500" />
-                    <input
-                      type="email"
-                      required
-                      value={googleEmail}
-                      onChange={(e) => {
-                        setGoogleEmail(e.target.value);
-                        if (errorMessage) setErrorMessage(null);
-                      }}
-                      placeholder="usuario@gmail.com"
-                      className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-600 focus:outline-none transition"
-                    />
-                  </div>
+            {/* Si es el Propietario, se solicita el PIN Maestro */}
+            {isOwnerEmail ? (
+              <div className="space-y-1.5 p-3 rounded-2xl bg-red-950/20 border border-red-900/40 animate-in fade-in">
+                <div className="flex items-center justify-between text-xs font-bold text-red-400">
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span>PIN de Seguridad del Propietario</span>
+                  </span>
+                  <span className="text-[10px] uppercase font-mono bg-red-600/30 px-1.5 py-0.5 rounded text-red-300">
+                    Super Admin
+                  </span>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-neutral-300">
-                    Nombre de Usuario (Opcional)
-                  </label>
+                <div className="relative">
                   <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Tu nombre o alias"
-                    className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-600 focus:outline-none transition"
+                    type={showPin ? 'text' : 'password'}
+                    required
+                    value={adminPin}
+                    onChange={(e) => setAdminPin(e.target.value)}
+                    placeholder="Introduce tu PIN Maestro"
+                    className="w-full rounded-xl border border-red-800/80 bg-neutral-900 pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-500 focus:outline-none transition"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3 top-2.5 text-neutral-400 hover:text-white"
+                  >
+                    {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+              </div>
+            ) : (
+              /* Nombre de Usuario Opcional para nuevos registros */
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-300">
+                  Nombre o Alias (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Tu nombre"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
+                />
+              </div>
+            )}
 
-                <button
-                  type="submit"
-                  disabled={isLoading || cooldownSeconds > 0 || !googleEmail.trim()}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold text-xs py-3 px-4 shadow-xl shadow-red-950/60 transition cursor-pointer"
-                >
-                  {isLoading ? (
-                    <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  ) : (
-                    <>
-                      <span>Registrar y Acceder</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-            </div>
-
-            {/* Medidas de Seguridad */}
-            <div className="mt-6 pt-4 border-t border-neutral-900">
-              <button
-                type="button"
-                onClick={() => setShowSecurityDetails(!showSecurityDetails)}
-                className="w-full flex items-center justify-between text-left text-xs font-semibold text-neutral-400 hover:text-white transition cursor-pointer"
-              >
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                  <span>Medidas de Seguridad y Control de Permanencia</span>
-                </div>
-                <span className="text-[11px] text-neutral-500">{showSecurityDetails ? '▲' : '▼'}</span>
-              </button>
-
-              {showSecurityDetails && (
-                <div className="mt-3.5 space-y-2.5 rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-3.5 text-[11px] text-neutral-300 animate-in fade-in">
-                  
-                  <div className="flex items-start gap-2">
-                    <Lock className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-white">1. Bloqueo Cero-Confianza:</span> Catálogo y reproductores inaccesibles sin cuenta Google activa.
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <UserCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-white">2. Control Total de Permanencia:</span> El Administrador puede aprobar, suspender o eliminar a cualquier usuario en tiempo real.
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Mail className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-white">3. Validación Estricta Google:</span> Exclusivamente cuentas auténticas <code className="text-neutral-200">@gmail.com</code>.
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <KeyRound className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-white">4. Tokens SHA-256 Anti-Tampering:</span> Firmas criptográficas que revocan el acceso si se alteran datos locales.
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Shield className="h-3.5 w-3.5 text-purple-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-white">5. Escudo Anti-Fuerza Bruta:</span> Cooldown temporal automático ante intentos fallidos reiterados.
-                    </div>
-                  </div>
-
-                </div>
+            {/* Botón de Enviar */}
+            <button
+              type="submit"
+              disabled={isLoading || cooldownSeconds > 0 || !googleEmail.trim()}
+              className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl bg-[#FF1A24] hover:bg-[#FF242E] disabled:opacity-40 text-white font-bold text-xs py-3 px-4 shadow-xl shadow-red-950/60 transition cursor-pointer"
+            >
+              {isLoading ? (
+                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <>
+                  <span>Continuar</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
               )}
+            </button>
+
+            {/* Badge de Seguridad Minimalista */}
+            <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">
+              <Lock className="h-3 w-3 text-emerald-500" />
+              <span>Acceso Seguro · Verificación con Google</span>
             </div>
-          </>
+
+          </form>
         )}
 
       </div>

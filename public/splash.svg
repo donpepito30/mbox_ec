@@ -1,0 +1,63 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" fill="none">
+  <defs>
+    <radialGradient id="splashNeonHalo" cx="50%" cy="42%" r="40%">
+      <stop offset="0%" stop-color="#FF1A24" stop-opacity="0.45"/>
+      <stop offset="70%" stop-color="#FF1A24" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+
+    <linearGradient id="sPrismLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF242E"/>
+      <stop offset="100%" stop-color="#A00007"/>
+    </linearGradient>
+
+    <linearGradient id="sPrismCenter" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF1A24"/>
+      <stop offset="50%" stop-color="#E60012"/>
+      <stop offset="100%" stop-color="#8A0006"/>
+    </linearGradient>
+
+    <linearGradient id="sPrismRight" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF3B45"/>
+      <stop offset="100%" stop-color="#A00007"/>
+    </linearGradient>
+
+    <linearGradient id="sFloor" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="transparent"/>
+      <stop offset="50%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </linearGradient>
+
+    <filter id="sBoxGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Fondo Carbón Oficial #08080A -->
+  <rect width="1024" height="1024" fill="#08080A"/>
+
+  <!-- Halo Neón Centrado -->
+  <circle cx="512" cy="420" r="320" fill="url(#splashNeonHalo)"/>
+
+  <!-- Monograma Prismático Cinema Box (Safe-zone 80%) -->
+  <g filter="url(#sBoxGlow)">
+    <!-- Faceta Izquierda -->
+    <path d="M300 270 L460 330 L460 610 L300 550 Z" fill="url(#sPrismLeft)" stroke="#FF4D55" stroke-width="3"/>
+    <!-- Faceta Central -->
+    <path d="M460 330 L564 330 L564 610 L460 610 Z" fill="url(#sPrismCenter)"/>
+    <!-- Faceta Derecha -->
+    <path d="M564 330 L724 270 L724 550 L564 610 Z" fill="url(#sPrismRight)" stroke="#FF4D55" stroke-width="3"/>
+    <!-- Bisel Superior Reflectivo en Blanco Óptico -->
+    <path d="M300 270 L512 240 L724 270" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Línea Reflectiva Blanca de Escenario -->
+  <line x1="260" y1="670" x2="764" y2="670" stroke="url(#sFloor)" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Texto Principal MBOX_EC (Únicamente el logo) -->
+  <text x="512" y="780" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-weight="900" font-size="96" letter-spacing="-2">
+    <tspan fill="#FFFFFF">MBOX</tspan><tspan fill="#FF1A24">_EC</tspan>
+  </text>
+</svg>

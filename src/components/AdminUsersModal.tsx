@@ -21,6 +21,9 @@ import {
   AlertTriangle,
   Crown,
   Settings2,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   User,
@@ -35,6 +38,8 @@ import {
   updateAuthSettings,
   exportUsersJson,
   isSuperAdmin,
+  getMasterAdminPin,
+  setMasterAdminPin,
 } from '../services/auth.ts';
 
 interface AdminUsersModalProps {
@@ -65,11 +70,18 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
+  // PIN Maestro de Seguridad del Propietario
+  const [currentPin, setCurrentPin] = useState<string>('');
+  const [isEditingPin, setIsEditingPin] = useState<boolean>(false);
+  const [newPinInput, setNewPinInput] = useState<string>('');
+  const [showPinValue, setShowPinValue] = useState<boolean>(false);
+
   // Cargar usuarios y configuraciones
   const reloadData = () => {
     setUsersList(getAllUsers());
     const settings = getAuthSettings();
     setRequireApproval(settings.requireAdminApproval);
+    setCurrentPin(getMasterAdminPin());
   };
 
   useEffect(() => {
@@ -180,6 +192,21 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
       setActionSuccess(`Usuario ${newEmail} agregado y autorizado con éxito.`);
     } catch (err: any) {
       setActionError(err.message || 'Error al añadir usuario.');
+    }
+  };
+
+  const handleUpdatePin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      setMasterAdminPin(newPinInput);
+      setCurrentPin(newPinInput);
+      setIsEditingPin(false);
+      setNewPinInput('');
+      setActionSuccess('¡PIN Maestro del Propietario actualizado con éxito!');
+    } catch (err: any) {
+      setActionError(err.message || 'Error al actualizar el PIN.');
     }
   };
 
@@ -326,6 +353,74 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               <Plus className="h-4 w-4" />
               <span>Añadir Correo</span>
             </button>
+          </div>
+        </div>
+
+        {/* PIN Maestro de Seguridad del Propietario */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-amber-400" />
+              <h3 className="text-xs sm:text-sm font-bold text-white">
+                PIN Maestro de Seguridad del Propietario
+              </h3>
+            </div>
+            <p className="text-xs text-neutral-400 max-w-xl">
+              Solo tú conoces este PIN. Impide que terceros con acceso a la web puedan iniciar sesión con tu cuenta de Propietario ({currentUser.email}).
+            </p>
+            <div className="flex items-center gap-2 pt-1 font-mono text-xs text-neutral-300">
+              <span className="text-neutral-400">PIN Actual:</span>
+              <span className="bg-neutral-950 border border-neutral-800 px-2 py-0.5 rounded text-amber-400 font-bold">
+                {showPinValue ? currentPin : '••••••'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPinValue(!showPinValue)}
+                className="text-neutral-400 hover:text-white cursor-pointer ml-1"
+                title={showPinValue ? 'Ocultar' : 'Mostrar PIN'}
+              >
+                {showPinValue ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            {!isEditingPin ? (
+              <button
+                onClick={() => {
+                  setIsEditingPin(true);
+                  setNewPinInput(currentPin);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                <span>Modificar PIN</span>
+              </button>
+            ) : (
+              <form onSubmit={handleUpdatePin} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  value={newPinInput}
+                  onChange={(e) => setNewPinInput(e.target.value)}
+                  placeholder="Nuevo PIN (mín. 4 car.)"
+                  className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:border-amber-400 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPin(false)}
+                  className="text-xs text-neutral-400 hover:text-white cursor-pointer px-1"
+                >
+                  Cancelar
+                </button>
+              </form>
+            )}
           </div>
         </div>
 

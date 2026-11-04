@@ -1,6 +1,6 @@
 {
   "name": "Mbox_Ec - Streaming en Español",
-  "description": "Tu cine en casa: Películas, Series y Contenido Exclusivo en vivo.",
+  "description": "Tu cine en casa: Películas y Series en streaming.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

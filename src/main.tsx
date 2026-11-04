@@ -6,9 +6,9 @@ import './index.css';
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
-      console.log('[StreamShield SW registered] Scope:', reg.scope);
+      console.log('[Mbox_Ec SW registered] Scope:', reg.scope);
     }).catch((err) => {
-      console.warn('[StreamShield SW registration failed]:', err);
+      console.warn('[Mbox_Ec SW registration failed]:', err);
     });
   });
 }

@@ -118,27 +118,10 @@ export const CinemaBoxLogo: React.FC<CinemaBoxLogoProps> = ({
         </svg>
       </div>
 
-      {/* Rótulo Tipográfico Oficial Mbox_Ec */}
-      <div className="flex flex-col text-left">
-        <div className={`font-black tracking-tighter leading-none ${textClasses}`}>
-          <span className="text-white">MBOX</span>
-          <span className="text-[#FF1A24]">_EC</span>
-        </div>
-
-        {showTagline && (
-          <div className="flex flex-col mt-0.5">
-            <span className="text-[9px] sm:text-[10px] font-extrabold tracking-widest text-neutral-300 uppercase">
-              PLATAFORMA DE STREAMING
-            </span>
-            <div className="hidden sm:flex items-center gap-1.5 text-[8px] font-bold text-neutral-400 tracking-wider">
-              <span className="text-[#FF1A24]">PELÍCULAS</span>
-              <span className="text-neutral-600">·</span>
-              <span className="text-neutral-300">SERIES</span>
-              <span className="text-neutral-600">·</span>
-              <span className="text-[#FF1A24]">EN VIVO</span>
-            </div>
-          </div>
-        )}
+      {/* Rótulo Tipográfico Oficial Mbox_Ec - Únicamente el logo */}
+      <div className={`font-black tracking-tighter leading-none select-none ${textClasses}`}>
+        <span className="text-white">MBOX</span>
+        <span className="text-[#FF1A24]">_EC</span>
       </div>
     </div>
   );

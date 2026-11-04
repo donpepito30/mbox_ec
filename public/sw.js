@@ -1,18 +1,22 @@
 /**
- * StreamShield Service Worker (sw.js)
+ * Mbox_Ec Service Worker (sw.js)
  * Caches the core App Shell for offline resilience and fast loads
  * Ignores third-party video iframes to avoid caching unbounded media chunks
  */
 
-const CACHE_NAME = 'mbox-ec-shell-v1';
+const CACHE_NAME = 'mbox-ec-shell-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/favicon.svg',
   '/icon.svg',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
   '/apple-touch-icon.png',
+  '/pwa-splash.png',
 ];
 
 // 1. Install Event: Precache App Shell
@@ -20,7 +24,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[StreamShield SW] Precache warning:', err);
+        console.warn('[Mbox_Ec SW] Precache warning:', err);
       });
     }).then(() => self.skipWaiting())
   );
