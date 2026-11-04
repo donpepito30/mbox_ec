@@ -12,7 +12,11 @@ import {
   Play,
   ArrowLeft,
   X,
+  Shield,
+  ShieldCheck,
+  Globe,
 } from 'lucide-react';
+import { isBraveBrowser, launchInBrave } from '../services/brave.ts';
 
 export interface PlayerProps {
   /** Identificador de TMDb */
@@ -51,6 +55,13 @@ export const Player: React.FC<PlayerProps> = ({
   const [showPlayOverlay, setShowPlayOverlay] = useState<boolean>(true);
   const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
 
+  // Preferencia de idioma de audio y subtítulos (Español Latino por defecto)
+  const [audioLanguage, setAudioLanguage] = useState<'latino' | 'castellano' | 'sub'>('latino');
+
+  // Integración con Navegador Brave (bloqueo nativo de anuncios y popups)
+  const [isBrave, setIsBrave] = useState<boolean>(false);
+  const [braveNotice, setBraveNotice] = useState<string | null>(null);
+
   // Escudo silencioso invisible para absorber el primer clic sin mostrar avisos publicitarios
   const [shieldActive, setShieldActive] = useState<boolean>(true);
 
@@ -59,6 +70,11 @@ export const Player: React.FC<PlayerProps> = ({
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const timeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detectar si el usuario está actualmente en Brave
+  useEffect(() => {
+    isBraveBrowser().then(setIsBrave);
+  }, []);
 
   /**
    * Neutralizador global de popups y nuevas pestañas maliciosas
@@ -74,22 +90,36 @@ export const Player: React.FC<PlayerProps> = ({
   }, []);
 
   /**
-   * Generación de la URL según la documentación oficial de VidSrc:
-   * Películas: https://vidsrc.to/embed/movie/{id} (acepta TMDb o IMDb tt...)
-   * Series: https://vidsrc.to/embed/tv/{id}/{season}/{episode}
+   * Generación de la URL según la documentación oficial de VidSrc
+   * Configurada por defecto para priorizar siempre Español Latino (ds_lang=es y subtítulos en español)
    */
   const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
     const identifier = imdbId || tmdbId;
 
-    if (type === 'tv') {
-      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`;
+    let langParams = 'ds_lang=es&sub.lang=es&sub.label=Español+(Latino)';
+    if (audioLanguage === 'castellano') {
+      langParams = 'ds_lang=es&sub.lang=es&sub.label=Español';
+    } else if (audioLanguage === 'sub') {
+      langParams = 'sub.lang=es&sub.label=Español+(Latino)';
     }
-    return `https://vidsrc.to/embed/movie/${identifier}`;
-  }, [type, tmdbId, imdbId, currentSeason, currentEpisode]);
+
+    if (type === 'tv') {
+      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}?${langParams}`;
+    }
+    return `https://vidsrc.to/embed/movie/${identifier}?${langParams}`;
+  }, [type, tmdbId, imdbId, currentSeason, currentEpisode, audioLanguage]);
 
   const streamUrl = getStreamUrl();
+
+  const handleOpenInBrave = () => {
+    const res = launchInBrave(streamUrl);
+    setBraveNotice(res.message);
+    setTimeout(() => {
+      setBraveNotice(null);
+    }, 4500);
+  };
 
   const clearTimer = useCallback(() => {
     if (timeoutTimerRef.current) {
@@ -308,6 +338,48 @@ export const Player: React.FC<PlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Selector de Idioma (Español Latino por defecto) */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs">
+              <Globe className="h-3.5 w-3.5 text-[#FF1A24] shrink-0" />
+              <select
+                value={audioLanguage}
+                onChange={(e) => {
+                  setAudioLanguage(e.target.value as any);
+                  setShieldActive(true);
+                  setIframeKey((prev) => prev + 1);
+                }}
+                className="bg-transparent text-neutral-200 text-xs font-semibold focus:outline-none cursor-pointer"
+                title="Configuración de audio y subtítulos: Español Latino por defecto"
+              >
+                <option value="latino" className="bg-neutral-950 text-white">Español Latino (Por defecto)</option>
+                <option value="castellano" className="bg-neutral-950 text-white">Español Castellano</option>
+                <option value="sub" className="bg-neutral-950 text-white">Subtitulado (Español)</option>
+              </select>
+            </div>
+
+            {/* Integración con Navegador Brave (Reproducción Sin Publicidad) */}
+            {isBrave ? (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-950/40 border border-orange-800/60 text-orange-400 text-xs font-bold"
+                title="Reproduciendo en Brave Browser con escudo publicitario activo"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-orange-400" />
+                <span className="hidden md:inline">Sin Anuncios (Brave)</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                tabIndex={0}
+                onClick={handleOpenInBrave}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-950/50 transition cursor-pointer"
+                title="Abrir en el Navegador Brave para ver sin anuncios ni ventanas emergentes"
+              >
+                <Shield className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Abrir en Brave</span>
+                <span className="md:hidden">Brave</span>
+              </button>
+            )}
+
             {/* Botón de Pantalla Completa (Optimizado para móvil y Smart TV) */}
             <button
               type="button"
@@ -318,12 +390,12 @@ export const Player: React.FC<PlayerProps> = ({
             >
               {isFullscreen ? (
                 <>
-                  <Minimize className="h-4 w-4 text-red-500" />
+                  <Minimize className="h-4 w-4 text-[#FF1A24]" />
                   <span className="hidden sm:inline">Salir</span>
                 </>
               ) : (
                 <>
-                  <Maximize className="h-4 w-4 text-red-500" />
+                  <Maximize className="h-4 w-4 text-[#FF1A24]" />
                   <span className="hidden sm:inline">Pantalla Completa</span>
                 </>
               )}
@@ -337,7 +409,7 @@ export const Player: React.FC<PlayerProps> = ({
               className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 transition cursor-pointer"
               title="Recargar reproductor"
             >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin text-red-500' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin text-[#FF1A24]' : ''}`} />
             </button>
 
             {isFullscreen && (
@@ -353,6 +425,14 @@ export const Player: React.FC<PlayerProps> = ({
             )}
           </div>
         </div>
+
+        {/* Notificación flotante de Brave */}
+        {braveNotice && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-950 border border-orange-700 text-orange-100 text-xs font-semibold shadow-2xl backdrop-blur-md animate-in fade-in">
+            <ShieldCheck className="h-4 w-4 text-orange-400 shrink-0" />
+            <span>{braveNotice}</span>
+          </div>
+        )}
 
         {/* Controles Limpios de Temporada y Episodio para Series */}
         {type === 'tv' && (

@@ -118,8 +118,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           
           {/* Metadatos superiores */}
           <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-            <span className="text-[#FF1A24] font-black">
-              Mbox_Ec · Tu cine en casa
+            <span className="text-[#FF1A24] font-black tracking-wide">
+              Mbox_Ec
+            </span>
+            <span aria-hidden="true" className="text-neutral-700">·</span>
+            <span className="text-emerald-400 font-bold">
+              Español Latino
             </span>
             <span aria-hidden="true" className="text-neutral-700">·</span>
             <span className="text-neutral-300 font-bold">

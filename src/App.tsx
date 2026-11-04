@@ -658,8 +658,9 @@ export default function App() {
                       ? `Resultados para "${searchQuery}"`
                       : 'Estrenos, Series y Tendencias'}
                   </h2>
-                  <p className="text-xs text-neutral-400 mt-0.5">
-                    Mbox_Ec: Tu cine en casa
+                  <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    <span>Español Latino (es-MX) por defecto</span>
                   </p>
                 </div>
 

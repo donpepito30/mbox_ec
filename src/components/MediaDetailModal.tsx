@@ -1,8 +1,9 @@
 // Mbox_ec - Modal de Detalles y Ficha Audiovisual
 import React, { useEffect, useState } from 'react';
-import { X, Star, Clock, Calendar, Film, Play, Tv } from 'lucide-react';
+import { X, Star, Clock, Calendar, Film, Play, Tv, ShieldCheck, Globe } from 'lucide-react';
 import { MediaDetails, MediaItem } from '../types/index.ts';
 import { getImageUrl, getMediaDetails } from '../services/tmdb.ts';
+import { launchInBrave } from '../services/brave.ts';
 
 interface MediaDetailModalProps {
   item: MediaItem | null;
@@ -14,6 +15,7 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
   const [details, setDetails] = useState<MediaDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [showVideo, setShowVideo] = useState(false);
+  const [braveNotice, setBraveNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!item) {
@@ -142,6 +144,23 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                   </button>
                 )}
 
+                <button
+                  onClick={() => {
+                    const isTvItem = (details?.media_type || item.media_type) === 'tv';
+                    const targetUrl = isTvItem
+                      ? `https://vidsrc.to/embed/tv/${item.id}/1/1?ds_lang=es&sub.lang=es&sub.label=Español+(Latino)`
+                      : `https://vidsrc.to/embed/movie/${item.id}?ds_lang=es&sub.lang=es&sub.label=Español+(Latino)`;
+                    const res = launchInBrave(targetUrl);
+                    setBraveNotice(res.message);
+                    setTimeout(() => setBraveNotice(null), 4500);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-950/20 py-2.5 px-3 text-xs font-bold text-orange-400 hover:bg-orange-950/40 hover:border-orange-500 transition-colors cursor-pointer shadow-md"
+                  title="Abrir transmisión directamente en Brave Browser sin anuncios ni popups"
+                >
+                  <ShieldCheck className="h-4 w-4 text-orange-400" />
+                  <span>Ver en Brave (Sin Anuncios)</span>
+                </button>
+
                 {trailerVideo && (
                   <button
                     onClick={() => setShowVideo(!showVideo)}
@@ -150,6 +169,12 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                     <Play className="h-3.5 w-3.5 text-red-500" />
                     <span>{showVideo ? 'Ocultar Tráiler' : 'Ver Tráiler'}</span>
                   </button>
+                )}
+
+                {braveNotice && (
+                  <div className="rounded-lg bg-orange-950/90 border border-orange-500/50 p-2.5 text-[11px] text-orange-200 leading-tight animate-in fade-in">
+                    {braveNotice}
+                  </div>
                 )}
               </div>
             </div>
@@ -162,6 +187,11 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                 <span className="flex items-center gap-1 font-bold text-amber-400 font-mono tabular-nums">
                   <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                   {rating}
+                </span>
+                <span aria-hidden="true" className="text-neutral-700">·</span>
+                <span className="flex items-center gap-1 rounded bg-neutral-900 border border-neutral-800 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+                  <Globe className="h-3 w-3 text-emerald-400" />
+                  <span>Español Latino (es-MX)</span>
                 </span>
                 <span aria-hidden="true" className="text-neutral-700">·</span>
                 <span className="flex items-center gap-1">

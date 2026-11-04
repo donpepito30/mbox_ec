@@ -94,15 +94,44 @@ interface CacheEntry<T> {
 }
 const memoryCache = new Map<string, CacheEntry<unknown>>();
 
+export type SpanishVariant = 'es-MX' | 'es-ES';
+const LANGUAGE_PREF_KEY = 'mbox_spanish_variant_v2';
+
+/**
+ * Obtiene la variante de español preferida (Español Latino es-MX por defecto)
+ */
+export function getPreferredSpanishVariant(): SpanishVariant {
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(LANGUAGE_PREF_KEY);
+      if (stored === 'es-MX' || stored === 'es-ES') return stored;
+    }
+  } catch {}
+  return 'es-MX'; // Español Latinoamericano por defecto
+}
+
+/**
+ * Modifica la variante de español preferida
+ */
+export function setPreferredSpanishVariant(variant: SpanishVariant): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LANGUAGE_PREF_KEY, variant);
+      memoryCache.clear();
+    }
+  } catch {}
+}
+
 /**
  * Cliente HTTP estricto con Bearer Token
- * Prioridad de idioma: español (es-ES / es-MX), con fallback automático
+ * Prioridad de idioma por defecto: Español Latinoamericano (es-MX) con región MX,
+ * garantizando títulos, sinopsis y portadas en español latino
  */
 async function tmdbFetch<T>(
   endpoint: string,
   params: Record<string, string | number> = {},
   revalidateSeconds: number = 604800,
-  defaultLang: string = 'es-ES'
+  defaultLang: string = getPreferredSpanishVariant()
 ): Promise<T> {
   const token = getReadAccessToken();
   const baseUrl = getBaseUrl();
@@ -113,7 +142,8 @@ async function tmdbFetch<T>(
 
   const queryParams = new URLSearchParams({
     language: defaultLang,
-    include_image_language: 'es,en,null',
+    region: 'MX',
+    include_image_language: 'es,es-MX,null,en',
     ...Object.fromEntries(
       Object.entries(params)
         .filter(([_, v]) => v !== undefined && v !== '')
@@ -165,19 +195,20 @@ async function tmdbFetch<T>(
 
 /**
  * 1. getTrending(type, timeWindow)
- * Prioriza contenido en español semanal
+ * Prioriza contenido en español latino (es-MX) semanal
  */
 export async function getTrending(
   type: MediaType = 'all',
   timeWindow: TimeWindow = 'week'
 ): Promise<TMDBResponse<MediaItem>> {
   const endpoint = `/trending/${type}/${timeWindow}`;
+  const defaultLang = getPreferredSpanishVariant();
   
   const response = await tmdbFetch<TMDBResponse<MediaItem>>(
     endpoint,
-    {},
+    { region: 'MX' },
     604800,
-    'es-ES'
+    defaultLang
   );
 
   if (response.results) {
@@ -193,7 +224,8 @@ export async function getTrending(
 
 /**
  * 2. getMediaDetails(id, type, appendToResponse)
- * Obtiene detalles en español (es-ES). Si la sinopsis está vacía, busca en es-MX o fallback.
+ * Obtiene detalles preferentemente en Español Latinoamericano (es-MX).
+ * Si la sinopsis está vacía, busca en es-ES o en traducciones oficiales de TMDb.
  */
 export async function getMediaDetails(
   id: number | string,
@@ -201,32 +233,52 @@ export async function getMediaDetails(
   appendToResponse: string = 'videos'
 ): Promise<MediaDetails> {
   const endpoint = `/${type}/${id}`;
+  const preferredLang = getPreferredSpanishVariant();
   
   const params: Record<string, string> = {};
-  const appendItems = appendToResponse ? (appendToResponse.includes('external_ids') ? appendToResponse : `${appendToResponse},external_ids`) : 'videos,external_ids';
+  const appendItems = appendToResponse
+    ? (appendToResponse.includes('translations') ? appendToResponse : `${appendToResponse},translations,external_ids`)
+    : 'videos,translations,external_ids';
   params.append_to_response = appendItems;
 
   let details = await tmdbFetch<MediaDetails>(
     endpoint,
     params,
     86400,
-    'es-ES'
+    preferredLang
   );
 
-  // Optimización de idioma: si la sinopsis en español está vacía, intentar complementar
+  // Optimización de idioma: si la sinopsis en español latino está vacía, complementar con es-ES
   if (!details.overview || details.overview.trim() === '') {
     try {
       const fallbackDetails = await tmdbFetch<MediaDetails>(
         endpoint,
         params,
         86400,
-        'es-MX'
+        preferredLang === 'es-MX' ? 'es-ES' : 'es-MX'
       );
       if (fallbackDetails.overview && fallbackDetails.overview.trim() !== '') {
         details.overview = fallbackDetails.overview;
       }
+      if (!details.title && fallbackDetails.title) {
+        details.title = fallbackDetails.title;
+      }
     } catch {
       // Conservar detalles originales
+    }
+  }
+
+  // Si aún falta overview, buscar en el listado de traducciones oficial
+  if ((!details.overview || details.overview.trim() === '') && (details as any).translations?.translations) {
+    const list = (details as any).translations.translations;
+    const esMx = list.find((t: any) => t.iso_639_1 === 'es' && (t.iso_3166_1 === 'MX' || t.iso_3166_1 === 'US'));
+    const esEs = list.find((t: any) => t.iso_639_1 === 'es');
+    const best = esMx || esEs;
+    if (best?.data?.overview) {
+      details.overview = best.data.overview;
+    }
+    if (best?.data?.title && !details.title) {
+      details.title = best.data.title;
     }
   }
 
@@ -241,8 +293,9 @@ export async function getMediaDetails(
 
 /**
  * 3. searchMedia(query, type)
- * Optimizado para buscar primero en español (es-ES). Si no hay resultados o son escasos,
- * busca automáticamente en otros idiomas para encontrar cualquier título internacional.
+ * Optimizado para buscar siempre en Español Latino (es-MX) por defecto.
+ * Si el usuario introduce un título en inglés o no hay resultados en es-MX,
+ * busca automáticamente en es-ES y en multilenguaje para encontrar el título.
  */
 export async function searchMedia(
   query: string,
@@ -254,16 +307,35 @@ export async function searchMedia(
   }
 
   const endpoint = type === 'all' ? '/search/multi' : `/search/${type}`;
+  const preferredLang = getPreferredSpanishVariant();
   
-  // Paso 1: Búsqueda en Español
+  // Paso 1: Búsqueda prioritaria en Español Latino (es-MX)
   let response = await tmdbFetch<TMDBResponse<MediaItem>>(
     endpoint,
-    { query: cleanQuery, include_adult: 'false' },
+    { query: cleanQuery, include_adult: 'false', region: 'MX' },
     3600,
-    'es-ES'
+    preferredLang
   );
 
-  // Paso 2: Si no hubo resultados en español o hay muy pocos, buscar en general (inglés / multilenguaje)
+  // Paso 2: Si no hubo resultados en español latino, intentar en español general (es-ES)
+  if (!response.results || response.results.length === 0) {
+    try {
+      const altLang = preferredLang === 'es-MX' ? 'es-ES' : 'es-MX';
+      const altResponse = await tmdbFetch<TMDBResponse<MediaItem>>(
+        endpoint,
+        { query: cleanQuery, include_adult: 'false' },
+        3600,
+        altLang
+      );
+      if (altResponse.results && altResponse.results.length > 0) {
+        response = altResponse;
+      }
+    } catch {
+      // Conservar respuesta
+    }
+  }
+
+  // Paso 3: Si no hubo resultados, buscar en general (inglés / multilenguaje internacional)
   if (!response.results || response.results.length === 0) {
     try {
       const multiLangResponse = await tmdbFetch<TMDBResponse<MediaItem>>(
@@ -285,6 +357,7 @@ export async function searchMedia(
       .filter((item) => item.poster_path || item.backdrop_path)
       .map((item) => ({
         ...item,
+        title: item.title || item.name || item.original_title || item.original_name,
         media_type: item.media_type || (type === 'all' ? (item.title ? 'movie' : 'tv') : type),
       }));
   }
