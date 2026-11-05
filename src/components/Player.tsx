@@ -14,7 +14,6 @@ import {
   X,
   Shield,
   ShieldCheck,
-  Globe,
 } from 'lucide-react';
 import { isBraveBrowser, launchInBrave } from '../services/brave.ts';
 
@@ -55,8 +54,6 @@ export const Player: React.FC<PlayerProps> = ({
   const [showPlayOverlay, setShowPlayOverlay] = useState<boolean>(true);
   const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
 
-  // Preferencia de idioma de audio y subtítulos (Español Latino por defecto)
-  const [audioLanguage, setAudioLanguage] = useState<'latino' | 'castellano' | 'sub'>('latino');
 
   // Integración con Navegador Brave (bloqueo nativo de anuncios y popups)
   const [isBrave, setIsBrave] = useState<boolean>(false);
@@ -331,24 +328,6 @@ export const Player: React.FC<PlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Selector de Servidor de Reproducción */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs">
-              <Globe className="h-3.5 w-3.5 text-[#FF1A24] shrink-0" />
-              <select
-                value={audioLanguage}
-                onChange={(e) => {
-                  setAudioLanguage(e.target.value as any);
-                  setShieldActive(true);
-                  setIframeKey((prev) => prev + 1);
-                }}
-                className="bg-transparent text-neutral-200 text-xs font-semibold focus:outline-none cursor-pointer"
-                title="Servidor de transmisión"
-              >
-                <option value="latino" className="bg-neutral-950 text-white">Servidor Principal (HD)</option>
-                <option value="castellano" className="bg-neutral-950 text-white">Servidor Alternativo</option>
-                <option value="sub" className="bg-neutral-950 text-white">Servidor Espejo</option>
-              </select>
-            </div>
 
             {/* Integración con Navegador Brave (Reproducción Sin Publicidad) */}
             {isBrave ? (
