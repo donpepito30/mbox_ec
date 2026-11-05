@@ -20,6 +20,7 @@ import {
 import {
   authenticateWithGoogle,
   checkRateLimit,
+  checkAdminPinRateLimit,
   validateGoogleEmail,
   getCurrentUser,
   logoutUser,
@@ -65,11 +66,13 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     }
   }, []);
 
-  // Verificar limitación de intentos al cargar
+  // Verificar limitación de intentos y PIN al cargar
   useEffect(() => {
     const rate = checkRateLimit();
-    if (rate.isBlocked) {
-      setCooldownSeconds(rate.remainingSeconds);
+    const pinRate = checkAdminPinRateLimit();
+    const maxRemaining = Math.max(rate.remainingSeconds || 0, pinRate.remainingSeconds || 0);
+    if (maxRemaining > 0) {
+      setCooldownSeconds(maxRemaining);
     }
   }, []);
 
@@ -137,8 +140,10 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
       }, 500);
     } catch (err: any) {
       const rate = checkRateLimit();
-      if (rate.isBlocked) {
-        setCooldownSeconds(rate.remainingSeconds);
+      const pinRate = checkAdminPinRateLimit();
+      const maxRemaining = Math.max(rate.remainingSeconds || 0, pinRate.remainingSeconds || 0);
+      if (maxRemaining > 0) {
+        setCooldownSeconds(maxRemaining);
       }
       setErrorMessage(err.message || 'Error en la verificación de la cuenta de Google.');
     } finally {

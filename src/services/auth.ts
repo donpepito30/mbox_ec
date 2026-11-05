@@ -1,6 +1,32 @@
-// Mbox_ec - Servicio de Autenticación de Cuentas Google y Gestión de Acceso
-// Control Total de Usuarios: Aprobación, Suspensión, Eliminación y Permanencia (Admin Panel)
 import { MediaItem } from '../types/index.ts';
+import {
+  normalizeGoogleEmail,
+  sanitizeText,
+  maskEmail,
+  timingSafeEqual,
+  computeCryptoSha256,
+  getSecuritySalt,
+  getDeviceFingerprint,
+  checkAdminPinRateLimit,
+  recordFailedAdminPinAttempt,
+  resetAdminPinRateLimit,
+  logSecurityEvent,
+  getSecurityAuditLog,
+  exportSecurityAuditLogJson,
+  clearSecurityAuditLog,
+  SecurityEvent,
+  SecuritySeverity,
+} from './security.ts';
+
+export type { SecurityEvent, SecuritySeverity };
+export {
+  getSecurityAuditLog,
+  exportSecurityAuditLogJson,
+  clearSecurityAuditLog,
+  maskEmail,
+  checkAdminPinRateLimit,
+  resetAdminPinRateLimit,
+};
 
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'USER';
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'SUSPENDED';
@@ -19,6 +45,7 @@ export interface User {
   lastLoginAt: string;
   sessionToken: string;
   expiresAt: number;
+  deviceFingerprint?: string;
   watchlist: MediaItem[];
 }
 
@@ -33,7 +60,6 @@ const ACTIVE_USER_KEY = 'mbox_google_session_v2';
 const USERS_DB_KEY = 'mbox_google_users_v2';
 const SETTINGS_KEY = 'mbox_auth_settings_v1';
 const RATE_LIMIT_KEY = 'mbox_auth_rate_limit_v1';
-const SECRET_SEED_KEY = 'mbox_client_entropy_salt_v1';
 
 // Super Administrador del Sistema
 export const SUPER_ADMIN_EMAILS = ['jj863620@gmail.com'];
@@ -53,49 +79,6 @@ const GOOGLE_AVATAR_COLORS = [
   'bg-purple-600',
   'bg-indigo-600',
 ];
-
-/**
- * Obtiene o inicializa la sal criptográfica local
- */
-function getEntropySalt(): string {
-  try {
-    let salt = localStorage.getItem(SECRET_SEED_KEY);
-    if (!salt) {
-      const array = new Uint8Array(32);
-      if (typeof window !== 'undefined' && window.crypto) {
-        window.crypto.getRandomValues(array);
-      }
-      salt = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-      localStorage.setItem(SECRET_SEED_KEY, salt);
-    }
-    return salt;
-  } catch {
-    return 'mbox_secure_entropy_fallback_salt_2026';
-  }
-}
-
-/**
- * Genera un hash SHA-256 criptográfico para firma de sesión
- */
-async function generateSha256(message: string): Promise<string> {
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(message);
-      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {}
-  }
-
-  let hash = 0;
-  for (let i = 0; i < message.length; i++) {
-    const char = message.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16) + 'secsafe';
-}
 
 /**
  * Comprueba si un correo pertenece al Super Administrador
@@ -128,11 +111,13 @@ export function getMasterAdminPin(): string {
  * Modifica el PIN Maestro de Seguridad (Solo Super Administrador)
  */
 export function setMasterAdminPin(newPin: string): boolean {
-  if (!newPin || newPin.trim().length < 4) {
+  const cleanPin = (newPin || '').trim();
+  if (!cleanPin || cleanPin.length < 4) {
     throw new Error('El PIN debe tener al menos 4 caracteres.');
   }
   try {
-    localStorage.setItem(MASTER_PIN_KEY, newPin.trim());
+    localStorage.setItem(MASTER_PIN_KEY, cleanPin);
+    logSecurityEvent('ADMIN_PIN_UPDATED', 'CRITICAL', 'PIN Maestro de Administrador actualizado.');
     return true;
   } catch {
     return false;
@@ -174,26 +159,15 @@ export function updateAuthSettings(newSettings: Partial<AuthSettings>): AuthSett
 }
 
 /**
- * MEDIDA DE SEGURIDAD 1: Validación estricta de correo Google
+ * MEDIDA DE SEGURIDAD 1: Validación estricta y normalización de correo Google (Anti-Bypass de alias)
  */
 export function validateGoogleEmail(email: string): { isValid: boolean; error?: string; cleanEmail: string } {
-  const cleanEmail = email.trim().toLowerCase();
-
-  if (!cleanEmail) {
-    return { isValid: false, error: 'Por favor, ingresa tu correo de Google.', cleanEmail: '' };
-  }
-
-  const googleEmailRegex = /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@(gmail\.com|googlemail\.com)$/;
-
-  if (!googleEmailRegex.test(cleanEmail)) {
-    return {
-      isValid: false,
-      error: 'Acceso restringido: Solo se permite registro e inicio con cuentas oficiales de Google (@gmail.com).',
-      cleanEmail,
-    };
-  }
-
-  return { isValid: true, cleanEmail };
+  const res = normalizeGoogleEmail(email);
+  return {
+    isValid: res.isValid,
+    error: res.error,
+    cleanEmail: res.normalized,
+  };
 }
 
 /**
@@ -234,6 +208,11 @@ export function recordFailedAttempt(): number {
 
     if (attempts >= MAX_FAILED_ATTEMPTS) {
       blockedUntil = now + COOLDOWN_DURATION_MS;
+      logSecurityEvent(
+        'AUTH_RATE_LIMIT_TRIGGERED',
+        'WARN',
+        `Límite de tasa alcanzado (${attempts} intentos). Bloqueo de seguridad temporal activo.`
+      );
     }
 
     sessionStorage.setItem(
@@ -262,28 +241,54 @@ export function generateCryptoNonce(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-async function createSignedToken(userId: string, email: string, expiresAt: number): Promise<string> {
-  const salt = getEntropySalt();
-  const payload = `${userId}:${email}:${expiresAt}:${salt}`;
-  const signature = await generateSha256(payload);
-  return `${userId}.${expiresAt}.${signature.substring(0, 32)}`;
+/**
+ * CAPA 3: Generación de token firmado criptográficamente ligado a la huella digital del dispositivo
+ */
+async function createSignedToken(userId: string, email: string, expiresAt: number, fingerprint: string): Promise<string> {
+  const salt = getSecuritySalt();
+  const payload = `${userId}:${email}:${expiresAt}:${fingerprint}:${salt}`;
+  const signature = await computeCryptoSha256(payload);
+  return `${userId}.${expiresAt}.${fingerprint}.${signature.substring(0, 32)}`;
 }
 
+/**
+ * CAPA 4: Verificación a prueba de manipulaciones y secuestro de sesión
+ */
 async function verifyTokenSignature(user: User): Promise<boolean> {
   if (!user || !user.sessionToken || !user.expiresAt) return false;
   const parts = user.sessionToken.split('.');
-  if (parts.length !== 3) return false;
 
-  const [tokenId, tokenExpiresStr, tokenSignature] = parts;
-  if (tokenId !== user.id || parseInt(tokenExpiresStr, 10) !== user.expiresAt) {
-    return false;
+  // Formato moderno de 4 partes (incluye huella de dispositivo)
+  if (parts.length === 4) {
+    const [tokenId, tokenExpiresStr, tokenFingerprint, tokenSignature] = parts;
+    if (tokenId !== user.id || parseInt(tokenExpiresStr, 10) !== user.expiresAt) {
+      logSecurityEvent('AUTH_TAMPER_DETECTED', 'CRITICAL', 'Token manipulado detectado.', user.email);
+      return false;
+    }
+
+    const currentFingerprint = await getDeviceFingerprint();
+    if (tokenFingerprint !== currentFingerprint && user.role !== 'SUPER_ADMIN') {
+      logSecurityEvent('AUTH_FINGERPRINT_MISMATCH', 'WARN', 'Discrepancia en huella de dispositivo.', user.email);
+    }
+
+    const salt = getSecuritySalt();
+    const payload = `${user.id}:${user.email}:${user.expiresAt}:${tokenFingerprint}:${salt}`;
+    const expectedSig = (await computeCryptoSha256(payload)).substring(0, 32);
+
+    return timingSafeEqual(expectedSig, tokenSignature);
   }
 
-  const salt = getEntropySalt();
-  const payload = `${user.id}:${user.email}:${user.expiresAt}:${salt}`;
-  const expectedSig = (await generateSha256(payload)).substring(0, 32);
+  // Compatibilidad con tokens previos de 3 partes
+  if (parts.length === 3) {
+    const [tokenId, tokenExpiresStr, tokenSignature] = parts;
+    if (tokenId !== user.id || parseInt(tokenExpiresStr, 10) !== user.expiresAt) return false;
+    const salt = getSecuritySalt();
+    const payload = `${user.id}:${user.email}:${user.expiresAt}:${salt}`;
+    const expectedSig = (await computeCryptoSha256(payload)).substring(0, 32);
+    return timingSafeEqual(expectedSig, tokenSignature);
+  }
 
-  return expectedSig === tokenSignature;
+  return false;
 }
 
 /**
@@ -356,17 +361,25 @@ export function updateUserStatus(email: string, status: UserStatus, reason?: str
     throw new Error('No es posible modificar el estado del Super Administrador.');
   }
 
+  const cleanReason = reason ? sanitizeText(reason) : undefined;
   user.status = status;
-  if (reason) user.statusReason = reason;
+  if (cleanReason) user.statusReason = cleanReason;
 
   users[cleanEmail] = user;
   saveStoredUsers(users);
+
+  logSecurityEvent(
+    'ADMIN_STATUS_CHANGED',
+    status === 'SUSPENDED' ? 'WARN' : 'INFO',
+    `Estado de usuario actualizado a [${status}]${cleanReason ? ` - Motivo: ${cleanReason}` : ''}`,
+    cleanEmail
+  );
 
   // Si el usuario modificado es el que está en sesión activa, actualizarlo
   const activeUser = getCurrentUser();
   if (activeUser && activeUser.email === cleanEmail) {
     activeUser.status = status;
-    activeUser.statusReason = reason;
+    activeUser.statusReason = cleanReason;
     localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify(activeUser));
   }
 
@@ -393,6 +406,13 @@ export function updateUserRole(email: string, role: UserRole): User {
   users[cleanEmail] = user;
   saveStoredUsers(users);
 
+  logSecurityEvent(
+    'ADMIN_ROLE_CHANGED',
+    role === 'ADMIN' ? 'WARN' : 'INFO',
+    `Rol de usuario modificado a [${role}]`,
+    cleanEmail
+  );
+
   const activeUser = getCurrentUser();
   if (activeUser && activeUser.email === cleanEmail) {
     activeUser.role = role;
@@ -417,6 +437,13 @@ export function deleteUser(email: string): boolean {
 
   delete users[cleanEmail];
   saveStoredUsers(users);
+
+  logSecurityEvent(
+    'ADMIN_USER_DELETED',
+    'CRITICAL',
+    'Cuenta de usuario purgada y eliminada definitivamente del sistema',
+    cleanEmail
+  );
 
   // Si el usuario eliminado tenía la sesión abierta, cerrarla
   const activeUser = getCurrentUser();
@@ -448,7 +475,7 @@ export function addUserManually(
     throw new Error('Este correo Google ya se encuentra registrado.');
   }
 
-  const displayName = name?.trim() || cleanEmail.split('@')[0];
+  const displayName = name ? sanitizeText(name) : cleanEmail.split('@')[0];
   const colorIndex = Math.floor(Math.random() * GOOGLE_AVATAR_COLORS.length);
   const now = new Date().toISOString();
 
@@ -469,6 +496,14 @@ export function addUserManually(
 
   users[cleanEmail] = newUser;
   saveStoredUsers(users);
+
+  logSecurityEvent(
+    'ADMIN_STATUS_CHANGED',
+    'INFO',
+    `Usuario añadido manualmente con rol [${role}] y estado [${status}]`,
+    cleanEmail
+  );
+
   return newUser;
 }
 
@@ -570,6 +605,7 @@ export async function authenticateWithGoogle(
 ): Promise<User> {
   const rateLimit = checkRateLimit();
   if (rateLimit.isBlocked) {
+    logSecurityEvent('AUTH_BLOCKED_ATTEMPT', 'WARN', `Acceso denegado: Enfriamiento activo (${rateLimit.remainingSeconds}s)`, email);
     throw new Error(
       `Demasiados intentos fallidos. Por seguridad, espera ${rateLimit.remainingSeconds} segundos.`
     );
@@ -578,6 +614,7 @@ export async function authenticateWithGoogle(
   const validation = validateGoogleEmail(email);
   if (!validation.isValid) {
     recordFailedAttempt();
+    logSecurityEvent('AUTH_LOGIN_FAILED', 'WARN', `Correo no válido o sospechoso: ${validation.error}`, email);
     throw new Error(validation.error);
   }
 
@@ -586,15 +623,37 @@ export async function authenticateWithGoogle(
 
   // CONTROL DE SEGURIDAD CRÍTICO DEL PROPIETARIO:
   // Si alguien ingresa el correo del Super Admin, DEBE proporcionar el PIN Maestro de Seguridad.
-  // Esto previene que terceros en la web compartida usurpen la cuenta del propietario.
+  // Protegido con:
+  // 1. Rate Limiting específico de PIN (3 intentos -> 3 min bloqueo)
+  // 2. Comparación en tiempo constante (timingSafeEqual) contra ataques de canal lateral
   if (isOwner) {
-    const expectedPin = getMasterAdminPin();
-    if (!adminPin || adminPin.trim() !== expectedPin) {
-      recordFailedAttempt();
-      throw new Error(
-        'Acceso restringido: Esta cuenta es del Propietario. Ingresa el PIN Maestro de Seguridad para autenticarte.'
-      );
+    const pinRate = checkAdminPinRateLimit();
+    if (pinRate.isBlocked) {
+      logSecurityEvent('AUTH_BLOCKED_ATTEMPT', 'CRITICAL', `Intento de acceso de Super Admin bloqueado: Límite de PIN agotado (${pinRate.remainingSeconds}s restantes)`, cleanEmail);
+      throw new Error(`Acceso temporalmente bloqueado para la cuenta de Propietario. Espera ${pinRate.remainingSeconds} segundos por protección.`);
     }
+
+    const expectedPin = getMasterAdminPin();
+    const cleanAdminPin = (adminPin || '').trim();
+
+    if (!cleanAdminPin || !timingSafeEqual(cleanAdminPin, expectedPin)) {
+      const pinResult = recordFailedAdminPinAttempt();
+      logSecurityEvent(
+        'ADMIN_PIN_ATTEMPT_FAILED',
+        'CRITICAL',
+        `PIN Maestro erróneo ingresado (${pinResult.attempts} fallo(s) registrado(s))`,
+        cleanEmail
+      );
+
+      if (pinResult.isBlocked) {
+        throw new Error(`Has agotado los 3 intentos permitidos para el PIN Maestro. La cuenta del Propietario ha sido bloqueada temporalmente por ${pinResult.remainingSeconds} segundos.`);
+      }
+
+      throw new Error(`PIN Maestro de Seguridad incorrecto. Intentos restantes antes del bloqueo: ${3 - pinResult.attempts}`);
+    }
+
+    // PIN verificado exitosamente
+    resetAdminPinRateLimit();
   }
 
   const users = getStoredUsers();
@@ -604,6 +663,7 @@ export async function authenticateWithGoogle(
   // Si la cuenta existe y está suspendida
   if (existingUser && existingUser.status === 'SUSPENDED' && !isOwner) {
     recordFailedAttempt();
+    logSecurityEvent('AUTH_BLOCKED_ATTEMPT', 'WARN', 'Intento de acceso por cuenta suspendida', cleanEmail);
     throw new Error(
       `Tu cuenta (${cleanEmail}) ha sido suspendida por el Administrador. ${existingUser.statusReason ? `Motivo: ${existingUser.statusReason}` : 'Contacta al soporte para reactivar tu acceso.'}`
     );
@@ -629,17 +689,21 @@ export async function authenticateWithGoogle(
   const now = Date.now();
   const expiresAt = now + SESSION_TTL_MS;
 
-  const displayName =
+  const rawName =
     providedName?.trim() ||
     existingUser?.name ||
     (isOwner ? 'Administrador Mbox' : cleanEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+  const displayName = sanitizeText(rawName);
 
   const avatarColor =
     existingUser?.avatarColor ||
     GOOGLE_AVATAR_COLORS[Math.floor(Math.random() * GOOGLE_AVATAR_COLORS.length)];
 
   const userId = existingUser?.id || `guser_${now}_${generateCryptoNonce().substring(0, 8)}`;
-  const sessionToken = await createSignedToken(userId, cleanEmail, expiresAt);
+  
+  // Huella digital de dispositivo
+  const deviceFingerprint = await getDeviceFingerprint();
+  const sessionToken = await createSignedToken(userId, cleanEmail, expiresAt, deviceFingerprint);
 
   const authenticatedUser: User = {
     id: userId,
@@ -654,6 +718,7 @@ export async function authenticateWithGoogle(
     lastLoginAt: new Date().toISOString(),
     sessionToken,
     expiresAt,
+    deviceFingerprint,
     watchlist: existingUser?.watchlist || [],
   };
 
@@ -667,6 +732,14 @@ export async function authenticateWithGoogle(
   }
 
   resetRateLimit();
+
+  logSecurityEvent(
+    'AUTH_LOGIN_SUCCESS',
+    'INFO',
+    `Autenticación exitosa completada para [${role}] con estado [${status}]`,
+    cleanEmail
+  );
+
   return authenticatedUser;
 }
 
