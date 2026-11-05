@@ -98,17 +98,16 @@ export const Player: React.FC<PlayerProps> = ({
     const e = currentEpisode || 1;
     const identifier = imdbId || tmdbId;
 
-    let langParams = 'ds_lang=es&sub.lang=es&sub.label=Español+(Latino)';
-    if (audioLanguage === 'castellano') {
-      langParams = 'ds_lang=es&sub.lang=es&sub.label=Español';
-    } else if (audioLanguage === 'sub') {
-      langParams = 'sub.lang=es&sub.label=Español+(Latino)';
-    }
+    // Parámetros compatibles y limpios para VidSrc que no interfieren con la carga del iframe
+    const langParam = audioLanguage === 'latino' || audioLanguage === 'castellano'
+      ? 'ds_lang=es'
+      : '';
+    const queryStr = langParam ? `?${langParam}` : '';
 
     if (type === 'tv') {
-      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}?${langParams}`;
+      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}${queryStr}`;
     }
-    return `https://vidsrc.to/embed/movie/${identifier}?${langParams}`;
+    return `https://vidsrc.to/embed/movie/${identifier}${queryStr}`;
   }, [type, tmdbId, imdbId, currentSeason, currentEpisode, audioLanguage]);
 
   const streamUrl = getStreamUrl();

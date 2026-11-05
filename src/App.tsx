@@ -660,7 +660,7 @@ export default function App() {
                   </h2>
                   <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                    <span>Español Latino (es-MX) por defecto</span>
+                    <span>Catálogo y búsqueda en español</span>
                   </p>
                 </div>
 
