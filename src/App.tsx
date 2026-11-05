@@ -99,11 +99,8 @@ export default function App() {
     };
   }, [watchingItem]);
 
-  // Cargar contenidos en tendencia desde TMDb (SOLO para usuarios autenticados y activos)
+  // Cargar contenidos en tendencia o por búsqueda desde TMDb
   const loadContent = useCallback(async (type: MediaType, query: string) => {
-    const user = getCurrentUser();
-    if (!user || user.status !== 'ACTIVE') return;
-
     setIsLoading(true);
     try {
       if (query.trim()) {
@@ -120,9 +117,8 @@ export default function App() {
     }
   }, []);
 
-  // Efecto de búsqueda con debounce
+  // Carga inicial y reactiva del catálogo con debounce para búsquedas
   useEffect(() => {
-    if (!currentUser || currentUser.status !== 'ACTIVE') return;
     if (selectedMediaType === 'watchlist') return;
 
     if (!searchQuery.trim()) {
@@ -132,10 +128,10 @@ export default function App() {
 
     const timer = setTimeout(() => {
       loadContent(selectedMediaType as MediaType, searchQuery);
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [currentUser, selectedMediaType, searchQuery, loadContent]);
+  }, [selectedMediaType, searchQuery, loadContent]);
 
   // Neutralizador Global de Pop-ups (Anti-Clickjacking / Ad Interceptor)
   useEffect(() => {
@@ -659,8 +655,8 @@ export default function App() {
                       : 'Estrenos, Series y Tendencias'}
                   </h2>
                   <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                    <span>Catálogo y búsqueda en español</span>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#FF1A24]"></span>
+                    <span>Catálogo de Películas y Series</span>
                   </p>
                 </div>
 
@@ -797,7 +793,10 @@ export default function App() {
           isOpen={isAdminModalOpen}
           onClose={() => setIsAdminModalOpen(false)}
           currentUser={currentUser}
-          onUserUpdated={refreshUserSession}
+          onUserUpdated={() => {
+            refreshUserSession();
+            loadContent(selectedMediaType as MediaType, searchQuery);
+          }}
         />
       )}
 

@@ -148,8 +148,8 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                   onClick={() => {
                     const isTvItem = (details?.media_type || item.media_type) === 'tv';
                     const targetUrl = isTvItem
-                      ? `https://vidsrc.to/embed/tv/${item.id}/1/1?ds_lang=es`
-                      : `https://vidsrc.to/embed/movie/${item.id}?ds_lang=es`;
+                      ? `https://vidsrc.to/embed/tv/${item.id}/1/1`
+                      : `https://vidsrc.to/embed/movie/${item.id}`;
                     const res = launchInBrave(targetUrl);
                     setBraveNotice(res.message);
                     setTimeout(() => setBraveNotice(null), 4500);
@@ -191,7 +191,7 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                 <span aria-hidden="true" className="text-neutral-700">·</span>
                 <span className="flex items-center gap-1 rounded bg-neutral-900 border border-neutral-800 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
                   <Globe className="h-3 w-3 text-emerald-400" />
-                  <span>Audio y subtítulos en español</span>
+                  <span>Multi-audio y subtítulos</span>
                 </span>
                 <span aria-hidden="true" className="text-neutral-700">·</span>
                 <span className="flex items-center gap-1">

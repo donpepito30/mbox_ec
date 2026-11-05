@@ -1,5 +1,5 @@
-// Mbox_ec - Servicio de Conexión a TMDb Optimizado en Español y Multilenguaje
-import {
+// Mbox_ec - Servicio de Conexión y Catálogo de Streaming (TMDb Universal)
+import type {
   MediaDetails,
   MediaItem,
   MediaType,
@@ -94,46 +94,15 @@ interface CacheEntry<T> {
 }
 const memoryCache = new Map<string, CacheEntry<unknown>>();
 
-export type SpanishVariant = 'es-MX' | 'es-ES';
-const LANGUAGE_PREF_KEY = 'mbox_spanish_variant_v2';
-
 /**
- * Obtiene la variante de español preferida
- */
-export function getPreferredSpanishVariant(): SpanishVariant {
-  try {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(LANGUAGE_PREF_KEY);
-      if (stored === 'es-MX' || stored === 'es-ES') return stored;
-    }
-  } catch {}
-  return 'es-ES'; // Español estándar completo por defecto
-}
-
-/**
- * Modifica la variante de español preferida
- */
-export function setPreferredSpanishVariant(variant: SpanishVariant): void {
-  try {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LANGUAGE_PREF_KEY, variant);
-      memoryCache.clear();
-    }
-  } catch {}
-}
-
-/**
- * Cliente HTTP estricto con Bearer Token
- * Optimizado para NO filtrar ni descartar contenido:
- * - Idioma por defecto: Español estándar ('es-ES') para máxima cobertura de títulos y sinopsis
- * - SIN parámetros invasivos de región ('region=MX') que filtren el 90% de las películas internacionales
- * - SIN parámetros inválidos de imagen en endpoints de búsqueda o tendencias
+ * Cliente HTTP para The Movie Database (TMDb)
+ * Compatible tanto con v4 Bearer Token como con v3 API Key.
+ * Búsqueda y catálogo universales sin filtros forzados que restrinjan resultados.
  */
 async function tmdbFetch<T>(
   endpoint: string,
   params: Record<string, string | number> = {},
-  revalidateSeconds: number = 604800,
-  defaultLang: string = 'es-ES'
+  revalidateSeconds: number = 604800
 ): Promise<T> {
   const token = getReadAccessToken();
   const baseUrl = getBaseUrl();
@@ -143,18 +112,21 @@ async function tmdbFetch<T>(
   }
 
   const queryParams = new URLSearchParams();
-  
-  // Establecer idioma si no viene especificado en params
-  const langToUse = (params.language as string) || defaultLang;
-  if (langToUse) {
-    queryParams.set('language', langToUse);
-  }
-
-  // Incorporar parámetros limpios
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '' && key !== 'language') {
+    if (value !== undefined && value !== '') {
       queryParams.set(key, String(value));
     }
+  }
+
+  const isBearer = token.length > 40 || token.includes('.');
+  const headers: Record<string, string> = {
+    accept: 'application/json',
+  };
+
+  if (isBearer) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    queryParams.set('api_key', token);
   }
 
   const queryString = queryParams.toString();
@@ -168,11 +140,6 @@ async function tmdbFetch<T>(
   }
 
   try {
-    const headers: Record<string, string> = {
-      accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
     const response = await fetch(url, {
       method: 'GET',
       headers,
@@ -180,7 +147,7 @@ async function tmdbFetch<T>(
 
     if (!response.ok) {
       if (response.status === 401) {
-        console.warn(`[TMDb] Token de acceso no autorizado (HTTP 401). Utilizando datos de respaldo.`);
+        console.warn(`[TMDb] Token de acceso no autorizado (HTTP 401). Utilizando catálogo local.`);
         return handleFallbackData<T>(endpoint, params);
       }
       throw new Error(`[TMDb Error] ${response.status}: ${response.statusText}`);
@@ -190,18 +157,18 @@ async function tmdbFetch<T>(
     memoryCache.set(cacheKey, { data, timestamp: now });
     return data;
   } catch (error) {
-    console.warn(`[TMDb Fetch Fallback] Petición fallida: ${(error as Error).message}. Utilizando datos locales.`);
+    console.warn(`[TMDb Fetch Fallback] Petición a ${url} fallida: ${(error as Error).message}. Utilizando catálogo local.`);
     return handleFallbackData<T>(endpoint, params);
   }
 }
 
 // ============================================================================
-// FUNCIONES DE CATÁLOGO Y BÚSQUEDA MULTILINGÜE (PRIORIDAD ESPAÑOL)
+// FUNCIONES DE CATÁLOGO Y BÚSQUEDA UNIVERSAL (SIN RESTRICCIONES DE IDIOMA)
 // ============================================================================
 
 /**
  * 1. getTrending(type, timeWindow)
- * Devuelve las tendencias globales completas con títulos y sinopsis en español
+ * Devuelve las tendencias globales completas
  */
 export async function getTrending(
   type: MediaType = 'all',
@@ -212,8 +179,7 @@ export async function getTrending(
   const response = await tmdbFetch<TMDBResponse<MediaItem>>(
     endpoint,
     {},
-    604800,
-    'es-ES'
+    604800
   );
 
   if (response.results) {
@@ -229,7 +195,7 @@ export async function getTrending(
 
 /**
  * 2. getMediaDetails(id, type, appendToResponse)
- * Obtiene la ficha técnica y trailers en español, con fallback limpio si falta sinopsis
+ * Obtiene la ficha técnica y trailers
  */
 export async function getMediaDetails(
   id: number | string,
@@ -244,30 +210,11 @@ export async function getMediaDetails(
       : `${appendToResponse},videos,external_ids`,
   };
 
-  let details = await tmdbFetch<MediaDetails>(
+  const details = await tmdbFetch<MediaDetails>(
     endpoint,
     params,
-    86400,
-    'es-ES'
+    86400
   );
-
-  // Si la sinopsis en español viene vacía de origen en TMDb, complementar con la versión original
-  if (!details.overview || details.overview.trim() === '') {
-    try {
-      const origDetails = await tmdbFetch<MediaDetails>(
-        endpoint,
-        params,
-        86400,
-        'en-US'
-      );
-      if (origDetails.overview && origDetails.overview.trim() !== '') {
-        details.overview = origDetails.overview;
-      }
-      if (!details.title && origDetails.title) {
-        details.title = origDetails.title;
-      }
-    } catch {}
-  }
 
   const resolvedImdbId = details.imdb_id || (details as any).external_ids?.imdb_id;
 
@@ -280,10 +227,7 @@ export async function getMediaDetails(
 
 /**
  * 3. searchMedia(query, type)
- * Búsqueda amplia y tolerante:
- * - Prioriza títulos traducidos al español sin descartar ningún contenido
- * - No restringe por región para que todas las películas y series aparezcan
- * - Si el usuario busca un título original (ej. "Avengers", "The Matrix"), busca en el catálogo global
+ * Búsqueda amplia y universal en TMDb sin parámetros restrictivos de idioma
  */
 export async function searchMedia(
   query: string,
@@ -296,29 +240,11 @@ export async function searchMedia(
 
   const endpoint = type === 'all' ? '/search/multi' : `/search/${type}`;
   
-  // Paso 1: Búsqueda con localización al español
-  let response = await tmdbFetch<TMDBResponse<MediaItem>>(
+  const response = await tmdbFetch<TMDBResponse<MediaItem>>(
     endpoint,
     { query: cleanQuery, include_adult: 'false' },
-    3600,
-    'es-ES'
+    3600
   );
-
-  // Paso 2: Si no hubo resultados en la búsqueda con filtro de idioma español
-  // (por ejemplo si el término es un nombre propio o título en inglés no indexado),
-  // buscar en el catálogo global para que NUNCA falte contenido
-  if (!response.results || response.results.length === 0) {
-    try {
-      const globalResponse = await tmdbFetch<TMDBResponse<MediaItem>>(
-        endpoint,
-        { query: cleanQuery, include_adult: 'false', language: 'en-US' },
-        3600
-      );
-      if (globalResponse.results && globalResponse.results.length > 0) {
-        response = globalResponse;
-      }
-    } catch {}
-  }
 
   if (response.results) {
     response.results = response.results
@@ -353,7 +279,7 @@ export const setRuntimeApiKey = setRuntimeReadAccessToken;
 export const hasActiveApiKey = hasActiveReadAccessToken;
 
 // ============================================================================
-// MOTOR DE CONTINGENCIA LOCAL CURADO EN ESPAÑOL
+// CATÁLOGO DE CONTINGENCIA LOCAL CURADO (UNIVERSAL)
 // ============================================================================
 
 const MOCK_TRENDING: MediaItem[] = [
@@ -1067,7 +993,7 @@ function handleFallbackData<T>(endpoint: string, params: Record<string, string |
       id,
       title: type === 'movie' ? 'Producción Oficial' : undefined,
       name: type === 'tv' ? 'Serie Oficial' : undefined,
-      overview: 'Sinopsis y detalles en idioma español preparados para su reproducción en alta fidelidad.',
+      overview: 'Sinopsis y detalles preparados para su reproducción en alta fidelidad.',
       poster_path: '/v2NN1TMK3ifuiEyawa3ukkcSOUQ.jpg',
       backdrop_path: '/eZ239CUp1d6OryZEBPnO2n87gMG.jpg',
       release_date: '2024-03-01',
@@ -1085,7 +1011,7 @@ function handleFallbackData<T>(endpoint: string, params: Record<string, string |
         { id: 878, name: 'Ciencia Ficción' },
         { id: 12, name: 'Aventura' },
       ],
-      tagline: 'Disfruta del mejor contenido en streaming con audio y subtítulos en español.',
+      tagline: 'Disfruta del mejor contenido en streaming con audio envolvente y subtítulos.',
       status: 'Estrenada',
       runtime: type === 'movie' ? 142 : undefined,
       number_of_seasons: type === 'tv' ? 2 : undefined,
@@ -1098,7 +1024,7 @@ function handleFallbackData<T>(endpoint: string, params: Record<string, string |
           {
             id: `video-${id}`,
             key: trailerKey,
-            name: `${baseItem.title || baseItem.name} - Tráiler Oficial en Español`,
+            name: `${baseItem.title || baseItem.name} - Tráiler Oficial`,
             site: 'YouTube',
             type: 'Trailer',
             official: true,

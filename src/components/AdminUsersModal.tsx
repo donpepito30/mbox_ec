@@ -31,6 +31,8 @@ import {
   Fingerprint,
   FileText,
   Activity,
+  Database,
+  Radio,
 } from 'lucide-react';
 import {
   User,
@@ -55,6 +57,10 @@ import {
   SecurityEvent,
   SecuritySeverity,
 } from '../services/auth.ts';
+import {
+  hasActiveReadAccessToken,
+  setRuntimeReadAccessToken,
+} from '../services/tmdb.ts';
 
 interface AdminUsersModalProps {
   isOpen: boolean;
@@ -102,6 +108,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     remainingSeconds: 0,
   });
 
+  // Conexión y Estado de Fuente TMDb
+  const [isTmdbConnected, setIsTmdbConnected] = useState<boolean>(false);
+  const [tmdbTokenInput, setTmdbTokenInput] = useState<string>('');
+  const [isEditingTmdb, setIsEditingTmdb] = useState<boolean>(false);
+
   // Cargar usuarios y configuraciones
   const reloadData = () => {
     setUsersList(getAllUsers());
@@ -110,6 +121,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setCurrentPin(getMasterAdminPin());
     setAuditLogs(getSecurityAuditLog());
     setPinLockStatus(checkAdminPinRateLimit());
+    setIsTmdbConnected(hasActiveReadAccessToken());
   };
 
   useEffect(() => {
@@ -254,6 +266,29 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     resetAdminPinRateLimit();
     setPinLockStatus({ isBlocked: false, remainingSeconds: 0 });
     setActionSuccess('Bloqueo temporal de PIN restablecido exitosamente.');
+  };
+
+  const handleSaveTmdbKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      setRuntimeReadAccessToken(tmdbTokenInput);
+      setIsTmdbConnected(hasActiveReadAccessToken());
+      setIsEditingTmdb(false);
+      setTmdbTokenInput('');
+      setActionSuccess('Credencial de TMDb actualizada. Catálogo conectado en vivo.');
+      if (onUserUpdated) onUserUpdated();
+    } catch (err: any) {
+      setActionError(err.message || 'Error al guardar credencial de TMDb.');
+    }
+  };
+
+  const handleClearTmdbKey = () => {
+    setRuntimeReadAccessToken('');
+    setIsTmdbConnected(false);
+    setActionSuccess('Clave TMDb removida. Se utiliza el catálogo local de contingencia.');
+    if (onUserUpdated) onUserUpdated();
   };
 
   const handleDownloadBackup = () => {
@@ -922,6 +957,84 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsEditingPin(false)}
+                      className="text-xs text-neutral-400 hover:text-white cursor-pointer px-2"
+                    >
+                      Cancelar
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            {/* Fuente de Contenidos y Conexión TMDb */}
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                    Fuente de Contenidos y Conexión TMDb
+                  </h3>
+                </div>
+                <p className="text-xs text-neutral-400 max-w-xl">
+                  {isTmdbConnected
+                    ? 'Conexión activa con la API oficial de The Movie Database (TMDb). Catálogo global en tiempo real.'
+                    : 'Modo local activo: Catálogo curado de 40+ producciones cinematográficas y series con pósteres y sinopsis en alta definición.'}
+                </p>
+                <div className="flex items-center gap-2 pt-1 text-xs">
+                  <span className="text-neutral-400 font-mono">Estado:</span>
+                  {isTmdbConnected ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-lg text-[11px]">
+                      <Radio className="h-3 w-3 animate-pulse" />
+                      API TMDb En Vivo Conectada
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-blue-400 font-bold bg-blue-950/60 border border-blue-800 px-2.5 py-0.5 rounded-lg text-[11px]">
+                      <CheckCircle className="h-3 w-3" />
+                      Catálogo Local de Respaldo Activo
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isEditingTmdb ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsEditingTmdb(true)}
+                      className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Database className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>{isTmdbConnected ? 'Cambiar Clave TMDb' : 'Conectar API TMDb'}</span>
+                    </button>
+                    {isTmdbConnected && (
+                      <button
+                        onClick={handleClearTmdbKey}
+                        className="px-3 py-2 rounded-xl bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-red-400 text-xs font-bold border border-neutral-800 transition cursor-pointer"
+                        title="Desconectar API y volver al catálogo local"
+                      >
+                        Desconectar
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveTmdbKey} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={tmdbTokenInput}
+                      onChange={(e) => setTmdbTokenInput(e.target.value)}
+                      placeholder="Token v4 o API Key v3 de TMDb..."
+                      className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white placeholder-neutral-500 focus:border-emerald-400 focus:outline-none w-56 sm:w-64"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTmdb(false)}
                       className="text-xs text-neutral-400 hover:text-white cursor-pointer px-2"
                     >
                       Cancelar

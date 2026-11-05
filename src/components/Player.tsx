@@ -90,25 +90,19 @@ export const Player: React.FC<PlayerProps> = ({
   }, []);
 
   /**
-   * Generación de la URL según la documentación oficial de VidSrc
-   * Configurada por defecto para priorizar siempre Español Latino (ds_lang=es y subtítulos en español)
+   * Generación de la URL limpia y oficial de VidSrc
+   * Sin parámetros invasivos que provoquen bloqueos o pantallas en blanco
    */
   const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
     const identifier = imdbId || tmdbId;
 
-    // Parámetros compatibles y limpios para VidSrc que no interfieren con la carga del iframe
-    const langParam = audioLanguage === 'latino' || audioLanguage === 'castellano'
-      ? 'ds_lang=es'
-      : '';
-    const queryStr = langParam ? `?${langParam}` : '';
-
     if (type === 'tv') {
-      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}${queryStr}`;
+      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`;
     }
-    return `https://vidsrc.to/embed/movie/${identifier}${queryStr}`;
-  }, [type, tmdbId, imdbId, currentSeason, currentEpisode, audioLanguage]);
+    return `https://vidsrc.to/embed/movie/${identifier}`;
+  }, [type, tmdbId, imdbId, currentSeason, currentEpisode]);
 
   const streamUrl = getStreamUrl();
 
@@ -337,7 +331,7 @@ export const Player: React.FC<PlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Selector de Idioma (Español Latino por defecto) */}
+            {/* Selector de Servidor de Reproducción */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs">
               <Globe className="h-3.5 w-3.5 text-[#FF1A24] shrink-0" />
               <select
@@ -348,11 +342,11 @@ export const Player: React.FC<PlayerProps> = ({
                   setIframeKey((prev) => prev + 1);
                 }}
                 className="bg-transparent text-neutral-200 text-xs font-semibold focus:outline-none cursor-pointer"
-                title="Configuración de audio y subtítulos: Español Latino por defecto"
+                title="Servidor de transmisión"
               >
-                <option value="latino" className="bg-neutral-950 text-white">Español Latino (Por defecto)</option>
-                <option value="castellano" className="bg-neutral-950 text-white">Español Castellano</option>
-                <option value="sub" className="bg-neutral-950 text-white">Subtitulado (Español)</option>
+                <option value="latino" className="bg-neutral-950 text-white">Servidor Principal (HD)</option>
+                <option value="castellano" className="bg-neutral-950 text-white">Servidor Alternativo</option>
+                <option value="sub" className="bg-neutral-950 text-white">Servidor Espejo</option>
               </select>
             </div>
 
