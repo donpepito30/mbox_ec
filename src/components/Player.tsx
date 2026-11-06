@@ -87,8 +87,7 @@ export const Player: React.FC<PlayerProps> = ({
   }, []);
 
   /**
-   * Generación de la URL limpia y oficial de VidSrc
-   * Sin parámetros invasivos que provoquen bloqueos o pantallas en blanco
+   * Resolucion automatica de la fuente AutoEmbed mediante IMDb o TMDb ID
    */
   const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
@@ -96,9 +95,9 @@ export const Player: React.FC<PlayerProps> = ({
     const identifier = imdbId || tmdbId;
 
     if (type === 'tv') {
-      return `https://vidsrc.to/embed/tv/${identifier}/${s}/${e}`;
+      return `https://autoembed.cc/embed/tv/${identifier}/${s}/${e}`;
     }
-    return `https://vidsrc.to/embed/movie/${identifier}`;
+    return `https://autoembed.cc/embed/movie/${identifier}`;
   }, [type, tmdbId, imdbId, currentSeason, currentEpisode]);
 
   const streamUrl = getStreamUrl();
@@ -535,9 +534,10 @@ export const Player: React.FC<PlayerProps> = ({
               </div>
             )}
 
-            {/* Capa Silenciosa de Absorción de Clickjacking (Cero textos, absorbe clics fantasma) */}
+            {/* Capa Anti-Anuncios (#ad-overlay) para neutralizar el primer clic */}
             {!showPlayOverlay && shieldActive && (
               <div
+                id="ad-overlay"
                 tabIndex={0}
                 onClick={handleAbsorbClick}
                 onTouchStart={handleAbsorbClick}
@@ -550,7 +550,7 @@ export const Player: React.FC<PlayerProps> = ({
               />
             )}
 
-            {/* Iframe del Reproductor VidSrc Oficial */}
+            {/* Iframe del Reproductor AutoEmbed */}
             <iframe
               key={iframeKey}
               src={streamUrl}
