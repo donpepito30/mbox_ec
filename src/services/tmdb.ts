@@ -204,10 +204,12 @@ export async function getMediaDetails(
 ): Promise<MediaDetails> {
   const endpoint = `/${type}/${id}`;
   
+  const parts = new Set(appendToResponse.split(',').map((s) => s.trim()).filter(Boolean));
+  parts.add('videos');
+  parts.add('external_ids');
+
   const params: Record<string, string> = {
-    append_to_response: appendToResponse.includes('videos')
-      ? appendToResponse
-      : `${appendToResponse},videos,external_ids`,
+    append_to_response: Array.from(parts).join(','),
   };
 
   const details = await tmdbFetch<MediaDetails>(

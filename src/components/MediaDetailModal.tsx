@@ -147,9 +147,10 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                 <button
                   onClick={() => {
                     const isTvItem = (details?.media_type || item.media_type) === 'tv';
+                    const idToUse = details?.imdb_id || item.imdb_id || item.id;
                     const targetUrl = isTvItem
-                      ? `https://player.autoembed.me/embed/tv/${item.id}/1/1`
-                      : `https://player.autoembed.me/embed/movie/${item.id}`;
+                      ? `https://playlatinsrc.co/custom/serial/${idToUse}/1/1?color=%23FF1A24`
+                      : `https://playlatinsrc.co/custom/movie/${idToUse}?color=%23FF1A24`;
                     const res = launchInBrave(targetUrl);
                     setBraveNotice(res.message);
                     setTimeout(() => setBraveNotice(null), 4500);

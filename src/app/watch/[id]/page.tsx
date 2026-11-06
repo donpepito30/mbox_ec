@@ -95,10 +95,12 @@ export default async function WatchPage(props: WatchPageProps) {
         <section aria-label="Reproductor de Streaming" className="w-full">
           <Player
             tmdbId={id}
+            imdbId={details.imdb_id}
             type={type}
             season={season}
             episode={episode}
             title={title}
+            backdropUrl={backdropUrl}
           />
         </section>
 

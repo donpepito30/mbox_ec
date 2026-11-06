@@ -1,4 +1,4 @@
-// Mbox_ec - Reproductor Minimalista de Alto Rendimiento (VidSrc Oficial)
+// Mbox_ec - Reproductor Minimalista con Contenido en Español (PlayLatinSRC + VidSrc)
 // Estilo Puro Netflix / Pluto TV: Cero etiquetas de servidores, cero selectores de aspecto, interfaz ultra limpia
 'use client';
 
@@ -36,19 +36,22 @@ export interface PlayerProps {
   onClose?: () => void;
 }
 
-const AUTOEMBED_ENDPOINTS = [
-  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
+const STREAM_ENDPOINTS = [
+  // Proveedor Principal: PlayLatinSRC (Especializado en Español Latino, Castellano y Subtitulado)
+  (type: 'movie' | 'tv', id: string | number, s: number, e: number) =>
     type === 'tv'
-      ? `https://player.autoembed.me/embed/tv/${id}/${s}/${e}`
-      : `https://player.autoembed.me/embed/movie/${id}`,
-  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
-    type === 'tv'
-      ? `https://autoembed.me/tv/tmdb/${tmdb}-${s}-${e}`
-      : `https://autoembed.me/movie/tmdb/${tmdb}`,
-  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
+      ? `https://playlatinsrc.co/custom/serial/${id}/${s}/${e}?color=%23FF1A24`
+      : `https://playlatinsrc.co/custom/movie/${id}?color=%23FF1A24`,
+  // Respaldo de Alta Disponibilidad: VidSrc Oficial
+  (type: 'movie' | 'tv', id: string | number, s: number, e: number) =>
     type === 'tv'
       ? `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
       : `https://vidsrc.to/embed/movie/${id}`,
+  // Respaldo Adicional: Espejo AutoEmbed
+  (type: 'movie' | 'tv', id: string | number, s: number, e: number) =>
+    type === 'tv'
+      ? `https://player.autoembed.me/embed/tv/${id}/${s}/${e}`
+      : `https://player.autoembed.me/embed/movie/${id}`,
 ];
 
 export const Player: React.FC<PlayerProps> = ({
@@ -102,14 +105,14 @@ export const Player: React.FC<PlayerProps> = ({
   }, []);
 
   /**
-   * Resolucion automatica de la fuente AutoEmbed mediante IMDb o TMDb ID
+   * Resolucion automatica de la fuente de streaming (VidSrc oficial de alta velocidad)
    */
   const getStreamUrl = useCallback((): string => {
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
     const identifier = imdbId || tmdbId;
-    const providerFn = AUTOEMBED_ENDPOINTS[providerIndex] || AUTOEMBED_ENDPOINTS[0];
-    return providerFn(type, identifier, tmdbId, s, e);
+    const providerFn = STREAM_ENDPOINTS[providerIndex] || STREAM_ENDPOINTS[0];
+    return providerFn(type, identifier, s, e);
   }, [type, tmdbId, imdbId, currentSeason, currentEpisode, providerIndex]);
 
   const streamUrl = getStreamUrl();
@@ -278,14 +281,14 @@ export const Player: React.FC<PlayerProps> = ({
   };
 
   const handleReload = () => {
-    setProviderIndex((prev) => (prev + 1) % AUTOEMBED_ENDPOINTS.length);
+    setProviderIndex((prev) => (prev + 1) % STREAM_ENDPOINTS.length);
     setShieldActive(true);
     setIframeKey((prev) => prev + 1);
     startTimer();
   };
 
   const handleIframeError = () => {
-    setProviderIndex((prev) => (prev + 1) % AUTOEMBED_ENDPOINTS.length);
+    setProviderIndex((prev) => (prev + 1) % STREAM_ENDPOINTS.length);
     setIframeKey((prev) => prev + 1);
     startTimer();
   };
