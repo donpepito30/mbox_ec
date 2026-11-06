@@ -36,6 +36,21 @@ export interface PlayerProps {
   onClose?: () => void;
 }
 
+const AUTOEMBED_ENDPOINTS = [
+  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
+    type === 'tv'
+      ? `https://player.autoembed.me/embed/tv/${id}/${s}/${e}`
+      : `https://player.autoembed.me/embed/movie/${id}`,
+  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
+    type === 'tv'
+      ? `https://autoembed.me/tv/tmdb/${tmdb}-${s}-${e}`
+      : `https://autoembed.me/movie/tmdb/${tmdb}`,
+  (type: 'movie' | 'tv', id: string | number, tmdb: string | number, s: number, e: number) =>
+    type === 'tv'
+      ? `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+      : `https://vidsrc.to/embed/movie/${id}`,
+];
+
 export const Player: React.FC<PlayerProps> = ({
   tmdbId,
   imdbId,
@@ -48,12 +63,12 @@ export const Player: React.FC<PlayerProps> = ({
 }) => {
   const [currentSeason, setCurrentSeason] = useState<number>(season);
   const [currentEpisode, setCurrentEpisode] = useState<number>(episode);
+  const [providerIndex, setProviderIndex] = useState<number>(0);
 
   const [iframeKey, setIframeKey] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showPlayOverlay, setShowPlayOverlay] = useState<boolean>(true);
   const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
-
 
   // Integración con Navegador Brave (bloqueo nativo de anuncios y popups)
   const [isBrave, setIsBrave] = useState<boolean>(false);
@@ -93,12 +108,9 @@ export const Player: React.FC<PlayerProps> = ({
     const s = currentSeason || 1;
     const e = currentEpisode || 1;
     const identifier = imdbId || tmdbId;
-
-    if (type === 'tv') {
-      return `https://autoembed.cc/embed/tv/${identifier}/${s}/${e}`;
-    }
-    return `https://autoembed.cc/embed/movie/${identifier}`;
-  }, [type, tmdbId, imdbId, currentSeason, currentEpisode]);
+    const providerFn = AUTOEMBED_ENDPOINTS[providerIndex] || AUTOEMBED_ENDPOINTS[0];
+    return providerFn(type, identifier, tmdbId, s, e);
+  }, [type, tmdbId, imdbId, currentSeason, currentEpisode, providerIndex]);
 
   const streamUrl = getStreamUrl();
 
@@ -131,6 +143,7 @@ export const Player: React.FC<PlayerProps> = ({
   useEffect(() => {
     setCurrentSeason(season);
     setCurrentEpisode(episode);
+    setProviderIndex(0);
     setShowPlayOverlay(true);
     setShieldActive(true);
     setIframeKey((prev) => prev + 1);
@@ -265,7 +278,14 @@ export const Player: React.FC<PlayerProps> = ({
   };
 
   const handleReload = () => {
+    setProviderIndex((prev) => (prev + 1) % AUTOEMBED_ENDPOINTS.length);
     setShieldActive(true);
+    setIframeKey((prev) => prev + 1);
+    startTimer();
+  };
+
+  const handleIframeError = () => {
+    setProviderIndex((prev) => (prev + 1) % AUTOEMBED_ENDPOINTS.length);
     setIframeKey((prev) => prev + 1);
     startTimer();
   };
@@ -552,7 +572,7 @@ export const Player: React.FC<PlayerProps> = ({
 
             {/* Iframe del Reproductor AutoEmbed */}
             <iframe
-              key={iframeKey}
+              key={`${iframeKey}-${providerIndex}`}
               src={streamUrl}
               title={title || 'Reproductor'}
               className="h-full w-full border-0"
@@ -560,6 +580,7 @@ export const Player: React.FC<PlayerProps> = ({
               referrerPolicy="origin"
               allowFullScreen
               onLoad={handleIframeLoad}
+              onError={handleIframeError}
             />
           </div>
         </div>

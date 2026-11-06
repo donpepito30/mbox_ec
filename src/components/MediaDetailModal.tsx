@@ -148,8 +148,8 @@ export const MediaDetailModal: React.FC<MediaDetailModalProps> = ({ item, onClos
                   onClick={() => {
                     const isTvItem = (details?.media_type || item.media_type) === 'tv';
                     const targetUrl = isTvItem
-                      ? `https://autoembed.cc/embed/tv/${item.id}/1/1`
-                      : `https://autoembed.cc/embed/movie/${item.id}`;
+                      ? `https://player.autoembed.me/embed/tv/${item.id}/1/1`
+                      : `https://player.autoembed.me/embed/movie/${item.id}`;
                     const res = launchInBrave(targetUrl);
                     setBraveNotice(res.message);
                     setTimeout(() => setBraveNotice(null), 4500);
