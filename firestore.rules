@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Bloqueo global de seguridad por defecto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 256
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['userId', 'mediaId', 'mediaType', 'title', 'addedAt'])
+        && data.keys().hasOnly(['userId', 'mediaId', 'mediaType', 'title', 'posterPath', 'backdropPath', 'voteAverage', 'releaseDate', 'addedAt'])
+        && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128
+        && data.mediaId is string && data.mediaId.size() > 0 && data.mediaId.size() <= 64
+        && (data.mediaType == 'movie' || data.mediaType == 'tv')
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 256
+        && (!('posterPath' in data) || (data.posterPath is string && data.posterPath.size() <= 512))
+        && (!('backdropPath' in data) || (data.backdropPath is string && data.backdropPath.size() <= 512))
+        && (!('voteAverage' in data) || (data.voteAverage is number))
+        && (!('releaseDate' in data) || (data.releaseDate is string && data.releaseDate.size() <= 32))
+        && data.addedAt is string && data.addedAt.size() <= 64;
+    }
+
+    // Reglas de seguridad para perfiles de usuario autenticados
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // Proteccion de PII: no permitir listar correos de otros usuarios
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == userId;
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcoleccion privada de favoritos y Mi Lista
+      match /favorites/{favoriteId} {
+        allow get, delete: if isOwner(userId) && isValidId(userId) && isValidId(favoriteId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(favoriteId) && isValidFavorite(incoming()) && incoming().userId == userId;
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(favoriteId) && isValidFavorite(incoming()) && incoming().userId == userId && incoming().mediaId == existing().mediaId && incoming().addedAt == existing().addedAt;
+      }
+    }
+  }
+}

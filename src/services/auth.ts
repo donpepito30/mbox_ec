@@ -753,6 +753,29 @@ export async function authenticateWithGoogle(
   return authenticatedUser;
 }
 
+/**
+ * Autentica al usuario utilizando credenciales reales verificadas de Google Firebase
+ */
+export async function authenticateWithVerifiedGoogleUser(
+  firebaseUser: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+  },
+  adminPin?: string
+): Promise<User> {
+  if (!firebaseUser.email) {
+    throw new Error('La cuenta de Google no proporciono una direccion de correo valida.');
+  }
+  return authenticateWithGoogle(
+    firebaseUser.email,
+    firebaseUser.displayName || undefined,
+    firebaseUser.photoURL || undefined,
+    adminPin
+  );
+}
+
 export function logoutUser(): void {
   try {
     localStorage.removeItem(ACTIVE_USER_KEY);

@@ -41,6 +41,12 @@ import {
   isAdmin,
   User,
 } from './services/auth.ts';
+import {
+  logoutUser as logoutFirebaseUser,
+  addFavoriteToFirestore,
+  removeFavoriteFromFirestore,
+  subscribeToFavorites,
+} from './services/firebase.ts';
 
 export default function App() {
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -180,14 +186,30 @@ export default function App() {
     setWatchingItem(null);
   };
 
-  // Manejo de Favoritos / Mi Lista
-  const handleToggleWatchlist = (item: MediaItem) => {
-    toggleWatchlist(item);
+  // Manejo de Favoritos / Mi Lista (Sincronizado con Firestore en tiempo real)
+  const handleToggleWatchlist = async (item: MediaItem) => {
+    const isAdded = toggleWatchlist(item);
     refreshUserSession();
+    if (currentUser?.id) {
+      try {
+        if (isAdded) {
+          await addFavoriteToFirestore(currentUser.id, item);
+        } else {
+          await removeFavoriteFromFirestore(currentUser.id, item.id);
+        }
+      } catch (err) {
+        console.warn('Error al persistir favorito en Firestore:', err);
+      }
+    }
   };
 
-  // Cierre de Sesión Seguro con Purga Criptográfica
-  const handleLogout = () => {
+  // Cierre de Sesión Seguro con Purga Criptográfica y Firebase
+  const handleLogout = async () => {
+    try {
+      await logoutFirebaseUser();
+    } catch (err) {
+      console.warn('Error en logout Firebase:', err);
+    }
     logoutUser();
     setCurrentUser(null);
     setItems([]);
@@ -351,9 +373,18 @@ export default function App() {
                 }
               >
                 <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-xs shadow-md ${currentUser.avatarColor}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-white font-black text-xs shadow-md overflow-hidden ${currentUser.avatarColor}`}
                 >
-                  {currentUser.name.charAt(0).toUpperCase()}
+                  {currentUser.picture ? (
+                    <img
+                      src={currentUser.picture}
+                      alt={currentUser.name}
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    currentUser.name.charAt(0).toUpperCase()
+                  )}
                 </div>
                 {/* Corona de Propietario o Check de Verificado */}
                 <div 
