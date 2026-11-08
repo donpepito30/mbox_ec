@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
@@ -42,6 +43,9 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        '@firebase-config': fs.existsSync(path.resolve(__dirname, 'firebase-applet-config.json'))
+          ? path.resolve(__dirname, 'firebase-applet-config.json')
+          : path.resolve(__dirname, 'src/config/firebase-config.defaults.json'),
       },
     },
     server: {

@@ -20,7 +20,7 @@ import {
   onSnapshot,
   getDocFromServer,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import firebaseConfig from '@firebase-config';
 import { MediaItem } from '../types/index.ts';
 
 // Resolucion hibrida: variables de entorno de Vercel (VITE_FIREBASE_*) con respaldo de firebase-applet-config.json

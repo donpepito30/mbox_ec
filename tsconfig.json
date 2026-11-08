@@ -19,6 +19,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@firebase-config": [
+        "./src/config/firebase-config.defaults.json"
       ]
     },
     "allowImportingTsExtensions": true,

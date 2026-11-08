@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Firebase local configurations with sensitive credentials
+firebase-applet-config.json
+firebase-blueprint.json
+
+# AI Studio runtime
+.aistudio/
+.dev.pid
