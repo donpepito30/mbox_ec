@@ -42,3 +42,51 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #dc2626;
 }
+
+/* Animaciones cinemáticas para el mosaico de películas y portadas en el Login */
+@keyframes poster-scroll-up {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes poster-scroll-down {
+  0% {
+    transform: translateY(-50%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-poster-scroll-up {
+  animation: poster-scroll-up 70s linear infinite;
+  will-change: transform;
+}
+
+.animate-poster-scroll-down {
+  animation: poster-scroll-down 75s linear infinite;
+  will-change: transform;
+}
+
+.animate-poster-scroll-up-delayed {
+  animation: poster-scroll-up 85s linear infinite;
+  will-change: transform;
+}
+
+.animate-poster-scroll-down-delayed {
+  animation: poster-scroll-down 65s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-poster-scroll-up,
+  .animate-poster-scroll-down,
+  .animate-poster-scroll-up-delayed,
+  .animate-poster-scroll-down-delayed {
+    animation: none !important;
+  }
+}

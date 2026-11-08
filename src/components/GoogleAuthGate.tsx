@@ -1,8 +1,9 @@
 // Mbox_ec - Puerta de Enlace de Autenticación Exclusiva con Google (Content Gate)
 // Integración Real con Google Firebase Auth (OAuth Popup) y Respaldo Seguro
+// Fondo Cinemático con Mosaico de Pósteres y Portadas (100% Inerte y Seguro)
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Lock,
   Mail,
@@ -37,6 +38,64 @@ interface GoogleAuthGateProps {
   moviePosters?: string[];
 }
 
+interface PosterItem {
+  id: string;
+  title: string;
+  url: string;
+  type?: 'poster' | 'backdrop';
+}
+
+/**
+ * Catálogo icónico de pósteres y portadas cinemáticas oficiales de alta definición (TMDb)
+ * Diseñado exclusivamente para ambientación estética de fondo sin comprometer la seguridad.
+ */
+const CINEMA_POSTERS_AND_COVERS: PosterItem[] = [
+  // --- Taquillazos y Éxitos de Cine ---
+  { id: 'p1', title: 'Dune: Parte Dos', url: 'https://image.tmdb.org/t/p/w500/v2NN1TMK3ifuiEyawa3ukkcSOUQ.jpg', type: 'poster' },
+  { id: 'p2', title: 'Interestelar', url: 'https://image.tmdb.org/t/p/w500/d1QKiYtceF3GDtxvTFXFAqwwah9.jpg', type: 'poster' },
+  { id: 'p3', title: 'Spider-Man: Multiverso', url: 'https://image.tmdb.org/t/p/w500/37WcNMgNOMxdhT87MFl7tq7FM1.jpg', type: 'poster' },
+  { id: 'p4', title: 'Oppenheimer', url: 'https://image.tmdb.org/t/p/w500/mJRUREPjTqqMEKwEiM2sdmIGngz.jpg', type: 'poster' },
+  { id: 'p5', title: 'The Dark Knight', url: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg', type: 'poster' },
+  { id: 'p6', title: 'The Batman', url: 'https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg', type: 'poster' },
+  { id: 'p7', title: 'Deadpool y Wolverine', url: 'https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg', type: 'poster' },
+  { id: 'p8', title: 'Avengers: Endgame', url: 'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg', type: 'poster' },
+  { id: 'p9', title: 'Avatar: El Camino del Agua', url: 'https://image.tmdb.org/t/p/w500/bqbFHw6UeB8jW3Fw5nK7t7bE1YQ.jpg', type: 'poster' },
+  { id: 'p10', title: 'Gladiador', url: 'https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg', type: 'poster' },
+  { id: 'p11', title: 'Matrix', url: 'https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg', type: 'poster' },
+  { id: 'p12', title: 'El Origen (Inception)', url: 'https://image.tmdb.org/t/p/w500/edv5CZvWj09upOsy2Y6IwDhK8bt.jpg', type: 'poster' },
+  { id: 'p13', title: 'Guasón (Joker)', url: 'https://image.tmdb.org/t/p/w500/v0Bisw22pY16i9iKqGsmY9aUe7b.jpg', type: 'poster' },
+  { id: 'p14', title: 'Intensamente 2', url: 'https://image.tmdb.org/t/p/w500/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg', type: 'poster' },
+  { id: 'p15', title: 'Coco', url: 'https://image.tmdb.org/t/p/w500/7qNy9b35y3pY456f91XQ4bF357E.jpg', type: 'poster' },
+  { id: 'p16', title: 'Super Mario Bros', url: 'https://image.tmdb.org/t/p/w500/qNBAXBIQlnOThrVvA6mA2B5ggV6.jpg', type: 'poster' },
+  { id: 'p17', title: 'Harry Potter', url: 'https://image.tmdb.org/t/p/w500/wuMc08IPKEatf9rnMNYrMHxqxmp.jpg', type: 'poster' },
+  { id: 'p18', title: 'El Conjuro', url: 'https://image.tmdb.org/t/p/w500/wVYREutTvI2COtxqPPia13q98mg.jpg', type: 'poster' },
+  { id: 'p19', title: 'John Wick 4', url: 'https://image.tmdb.org/t/p/w500/vZloFAK7NKnMGKEslUsDdmsQ5rm.jpg', type: 'poster' },
+  { id: 'p20', title: 'El Padrino', url: 'https://image.tmdb.org/t/p/w500/gVoJszZc8eG0zPZfK6d1hF9xWb.jpg', type: 'poster' },
+  { id: 'p21', title: 'El Club de la Pelea', url: 'https://image.tmdb.org/t/p/w500/8G5vQyJbWd6nS374n2R5z6m4Z1v.jpg', type: 'poster' },
+  { id: 'p22', title: 'Titanic', url: 'https://image.tmdb.org/t/p/w500/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg', type: 'poster' },
+  { id: 'p23', title: 'Godzilla y Kong', url: 'https://image.tmdb.org/t/p/w500/2YqZ6IyFk7menirwziJvfoVvSOh.jpg', type: 'poster' },
+
+  // --- Series Aclamadas y Populares ---
+  { id: 'p24', title: 'From (Origen)', url: 'https://image.tmdb.org/t/p/w500/7pHMZ6EsZfs2qZu0Lv2UGtTo5MU.jpg', type: 'poster' },
+  { id: 'p25', title: 'Arcane', url: 'https://image.tmdb.org/t/p/w500/87C0wecB8bHb1PsrKBI4kJiEkgV.jpg', type: 'poster' },
+  { id: 'p26', title: 'Breaking Bad', url: 'https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg', type: 'poster' },
+  { id: 'p27', title: 'The Last of Us', url: 'https://image.tmdb.org/t/p/w500/tNQWO6cNzQYCyvw36mUcAQQyf5F.jpg', type: 'poster' },
+  { id: 'p28', title: 'Stranger Things', url: 'https://image.tmdb.org/t/p/w500/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg', type: 'poster' },
+  { id: 'p29', title: 'Cyberpunk: Edgerunners', url: 'https://image.tmdb.org/t/p/w500/7jswLpmZ218tT6N7BslX2x7kI5F.jpg', type: 'poster' },
+  { id: 'p30', title: 'The Boys', url: 'https://image.tmdb.org/t/p/w500/2zmTngn1tYC1AvfnrFLhxeD82hz.jpg', type: 'poster' },
+  { id: 'p31', title: 'Juego de Tronos', url: 'https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg', type: 'poster' },
+  { id: 'p32', title: 'La Casa del Dragón', url: 'https://image.tmdb.org/t/p/w500/7QMsOTMUswlwxJP0rTTZfmz2tX2.jpg', type: 'poster' },
+
+  // --- Portadas Horizontales Cinemáticas / Backdrops ---
+  { id: 'b1', title: 'Dune Portada', url: 'https://image.tmdb.org/t/p/w780/eZ239CUp1d6OryZEBPnO2n87gMG.jpg', type: 'backdrop' },
+  { id: 'b2', title: 'Interstellar Portada', url: 'https://image.tmdb.org/t/p/w780/8sNiAPPYU14PUepFNeSNGUTiHW.jpg', type: 'backdrop' },
+  { id: 'b3', title: 'Oppenheimer Portada', url: 'https://image.tmdb.org/t/p/w780/neeNHeXjMF5fXoCJRsOmkNGC7q.jpg', type: 'backdrop' },
+  { id: 'b4', title: 'The Dark Knight Portada', url: 'https://image.tmdb.org/t/p/w780/nMKdUUepR0i5zn0y1T4CsSB5chy.jpg', type: 'backdrop' },
+  { id: 'b5', title: 'Arcane Portada', url: 'https://image.tmdb.org/t/p/w780/5cvnxEHT3e39DvT6ARw4GNCFrB0.jpg', type: 'backdrop' },
+  { id: 'b6', title: 'Breaking Bad Portada', url: 'https://image.tmdb.org/t/p/w780/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg', type: 'backdrop' },
+  { id: 'b7', title: 'The Last of Us Portada', url: 'https://image.tmdb.org/t/p/w780/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg', type: 'backdrop' },
+];
+
 export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
   onSuccess,
   moviePosters = [],
@@ -65,6 +124,30 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
 
   // Estado para verificación de PIN en flujo de correo manual
   const [manualPinEmail, setManualPinEmail] = useState<string | null>(null);
+
+  // Unificar pósteres proporcionados dinámicamente con el catálogo predeterminado
+  const postersList = useMemo(() => {
+    if (moviePosters && moviePosters.length > 0) {
+      const dynamicItems: PosterItem[] = moviePosters.map((url, i) => ({
+        id: `dyn-${i}`,
+        title: 'Cinema Poster',
+        url,
+        type: 'poster',
+      }));
+      return [...dynamicItems, ...CINEMA_POSTERS_AND_COVERS];
+    }
+    return CINEMA_POSTERS_AND_COVERS;
+  }, [moviePosters]);
+
+  // Distribuir pósteres y portadas en 6 columnas paralelas equilibradas
+  const posterColumns = useMemo(() => {
+    const numCols = 6;
+    const cols: PosterItem[][] = Array.from({ length: numCols }, () => []);
+    postersList.forEach((item, index) => {
+      cols[index % numCols].push(item);
+    });
+    return cols;
+  }, [postersList]);
 
   // Verificar si ya hay una sesión en espera o suspendida
   useEffect(() => {
@@ -322,57 +405,88 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     setSuccessMessage(null);
   };
 
-  const defaultPosters = [
-    'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=500&auto=format&fit=crop&q=80',
-  ];
-
-  const postersToDisplay = moviePosters.length > 0 ? moviePosters.slice(0, 16) : defaultPosters;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 bg-[#08080A] min-h-[100dvh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 bg-black min-h-[100dvh]">
       
-      {/* Fondo Cinemático Minimalista */}
-      <div className="absolute inset-0 z-0 overflow-hidden opacity-20 pointer-events-none select-none">
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 -rotate-3 scale-105">
-          {postersToDisplay.map((poster, index) => (
-            <div
-              key={`p1-${index}`}
-              className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800"
-            >
-              <img
-                src={poster}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover filter brightness-70"
-              />
-            </div>
-          ))}
-          {postersToDisplay.map((poster, index) => (
-            <div
-              key={`p2-${index}`}
-              className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800"
-            >
-              <img
-                src={poster}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover filter brightness-70"
-              />
-            </div>
-          ))}
+      {/* =========================================================================
+          FONDO CINEMÁTICO: MOSAICO DE PÓSTERES Y PORTADAS (100% INERTE Y SEGURO)
+          ========================================================================= */}
+      <div 
+        className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none bg-black"
+        aria-hidden="true"
+      >
+        {/* Grilla inclinada con columnas de marquesina infinita */}
+        <div className="absolute -inset-[35%] flex justify-center gap-3 sm:gap-4 md:gap-5 -rotate-2 scale-105 opacity-35 sm:opacity-40">
+          {posterColumns.map((col, colIdx) => {
+            const animClass =
+              colIdx % 4 === 0
+                ? 'animate-poster-scroll-up'
+                : colIdx % 4 === 1
+                ? 'animate-poster-scroll-down'
+                : colIdx % 4 === 2
+                ? 'animate-poster-scroll-up-delayed'
+                : 'animate-poster-scroll-down-delayed';
+
+            // Adaptabilidad responsiva: mostrar 2 columnas en mobile, 4 en tablet, 6 en desktop
+            const visibilityClass =
+              colIdx < 2
+                ? 'flex'
+                : colIdx < 4
+                ? 'hidden sm:flex'
+                : colIdx < 5
+                ? 'hidden md:flex'
+                : 'hidden lg:flex';
+
+            return (
+              <div
+                key={`col-${colIdx}`}
+                className={`${visibilityClass} flex-col gap-3 sm:gap-4 shrink-0 w-28 sm:w-36 md:w-44 lg:w-48 ${animClass}`}
+              >
+                {/* Repetición fluida para scroll infinito continuo */}
+                {[...col, ...col].map((item, itemIdx) => (
+                  <div
+                    key={`item-${colIdx}-${item.id}-${itemIdx}`}
+                    className={`relative rounded-2xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800/80 shrink-0 ${
+                      item.type === 'backdrop' ? 'aspect-[16/9]' : 'aspect-[2/3]'
+                    }`}
+                  >
+                    <img
+                      src={item.url}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-cover filter brightness-85 contrast-110"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.opacity = '0';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#08080A] via-[#08080A]/90 to-[#08080A]/80" />
+
+        {/* Resplandor cinemático central sutil (Cinema Box Red Ambient Glow) */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#FF1A24]/10 rounded-full blur-[140px] pointer-events-none" />
+
+        {/* Gradiente Radial Negro Profundo: Fondo negro cinemático con máxima legibilidad */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, rgba(4,4,6,0.76) 0%, rgba(4,4,6,0.90) 45%, #040406 85%, #000000 100%)',
+          }}
+        />
+
+        {/* Viñeta de degradado superior e inferior a negro puro */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/95 pointer-events-none" />
       </div>
 
-      {/* Tarjeta de Autenticación Minimalista */}
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-neutral-800/80 bg-neutral-950/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-neutral-100 my-auto">
+      {/* =========================================================================
+          TARJETA DE AUTENTICACIÓN (ELEVADA Y TOTALMENTE SEGURA: Z-10)
+          ========================================================================= */}
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-neutral-800/90 bg-neutral-950/95 p-6 sm:p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] backdrop-blur-2xl text-neutral-100 my-auto">
         
         {/* Únicamente el Logo Oficial Cinema Box Mbox_Ec */}
         <div className="text-center pb-6 border-b border-neutral-900 flex flex-col items-center">
