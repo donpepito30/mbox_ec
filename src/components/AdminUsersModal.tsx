@@ -61,6 +61,17 @@ import {
   hasActiveReadAccessToken,
   setRuntimeReadAccessToken,
 } from '../services/tmdb.ts';
+import {
+  subscribeToAllUsersFromFirestore,
+  updateUserStatusInFirestore,
+  updateUserRoleInFirestore,
+  deleteUserFromFirestore,
+  subscribeToAuthSettingsFromFirestore,
+  updateAuthSettingsInFirestore,
+  syncSecurityLogToFirestore,
+  subscribeToSecurityLogsFromFirestore,
+  syncUserProfile,
+} from '../services/firebase.ts';
 
 interface AdminUsersModalProps {
   isOpen: boolean;
@@ -113,7 +124,12 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const [tmdbTokenInput, setTmdbTokenInput] = useState<string>('');
   const [isEditingTmdb, setIsEditingTmdb] = useState<boolean>(false);
 
-  // Cargar usuarios y configuraciones
+  // Estado de sincronización en tiempo real con Firestore
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(true);
+  const [pendingDeleteEmail, setPendingDeleteEmail] = useState<string | null>(null);
+  const [isClearingLogsModal, setIsClearingLogsModal] = useState<boolean>(false);
+
+  // Cargar usuarios y configuraciones (local + Firestore)
   const reloadData = () => {
     setUsersList(getAllUsers());
     const settings = getAuthSettings();
@@ -124,12 +140,81 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setIsTmdbConnected(hasActiveReadAccessToken());
   };
 
+  // Suscripción en tiempo real a Firestore cuando el panel está abierto
   useEffect(() => {
-    if (isOpen) {
-      reloadData();
-      setActionError(null);
-      setActionSuccess(null);
-    }
+    if (!isOpen) return;
+
+    reloadData();
+    setActionError(null);
+    setActionSuccess(null);
+
+    // 1. Escuchar usuarios en tiempo real desde Firestore
+    const unsubUsers = subscribeToAllUsersFromFirestore(
+      (firestoreUsers) => {
+        setIsFirestoreConnected(true);
+        const localUsers = getAllUsers();
+        const map = new Map<string, User>();
+        localUsers.forEach((u) => map.set(u.email.toLowerCase().trim(), u));
+
+        firestoreUsers.forEach((fDoc: any) => {
+          const email = (fDoc.email || '').toLowerCase().trim();
+          if (!email) return;
+          const existing = map.get(email);
+          const merged: User = {
+            id: fDoc.uid || fDoc.id || existing?.id || `guser_${Date.now()}`,
+            email: fDoc.email,
+            name: fDoc.displayName || existing?.name || email.split('@')[0],
+            picture: fDoc.photoURL || existing?.picture,
+            avatarColor: existing?.avatarColor || 'bg-red-600',
+            provider: 'google',
+            role: fDoc.role || existing?.role || (isSuperAdmin(email) ? 'SUPER_ADMIN' : 'USER'),
+            status: fDoc.status || existing?.status || 'ACTIVE',
+            statusReason: fDoc.statusReason || existing?.statusReason,
+            createdAt: fDoc.createdAt || existing?.createdAt || new Date().toISOString(),
+            lastLoginAt: fDoc.updatedAt || existing?.lastLoginAt || new Date().toISOString(),
+            sessionToken: existing?.sessionToken || '',
+            expiresAt: existing?.expiresAt || Date.now() + 7 * 86400000,
+            watchlist: existing?.watchlist || [],
+          };
+          map.set(email, merged);
+        });
+
+        const list = Array.from(map.values()).sort((a, b) => {
+          if (a.role === 'SUPER_ADMIN') return -1;
+          if (b.role === 'SUPER_ADMIN') return 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setUsersList(list);
+      },
+      () => {
+        setIsFirestoreConnected(false);
+      }
+    );
+
+    // 2. Escuchar políticas de acceso en tiempo real
+    const unsubSettings = subscribeToAuthSettingsFromFirestore((settings) => {
+      setRequireApproval(settings.requireAdminApproval);
+    });
+
+    // 3. Escuchar registro de auditoría en tiempo real
+    const unsubLogs = subscribeToSecurityLogsFromFirestore((fLogs) => {
+      if (fLogs && fLogs.length > 0) {
+        setAuditLogs((prev) => {
+          const map = new Map<string, SecurityEvent>();
+          prev.forEach((l) => map.set(l.id, l));
+          (fLogs as SecurityEvent[]).forEach((l) => map.set(l.id, l));
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        });
+      }
+    });
+
+    return () => {
+      unsubUsers();
+      unsubSettings();
+      unsubLogs();
+    };
   }, [isOpen]);
 
   // Cerrar con Escape
@@ -172,15 +257,19 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     return matchesSeverity && matchesSearch;
   });
 
-  const handleStatusChange = (email: string, newStatus: UserStatus) => {
+  const handleStatusChange = async (email: string, newStatus: UserStatus) => {
     setActionError(null);
     setActionSuccess(null);
     try {
+      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        await updateUserStatusInFirestore(targetUser.id, newStatus);
+      }
       updateUserStatus(email, newStatus);
       reloadData();
       if (onUserUpdated) onUserUpdated();
       setActionSuccess(
-        `Estado de ${email} actualizado a ${
+        `Estado de ${email} actualizado en Firestore y activo como ${
           newStatus === 'ACTIVE' ? 'ACTIVO' : newStatus === 'SUSPENDED' ? 'SUSPENDIDO' : 'PENDIENTE'
         }.`
       );
@@ -189,58 +278,83 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     }
   };
 
-  const handleRoleChange = (email: string, role: UserRole) => {
+  const handleRoleChange = async (email: string, role: UserRole) => {
     setActionError(null);
     setActionSuccess(null);
     try {
+      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        await updateUserRoleInFirestore(targetUser.id, role);
+      }
       updateUserRole(email, role);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Rol de ${email} actualizado a ${role}.`);
+      setActionSuccess(`Rol de ${email} actualizado en Firestore a ${role}.`);
     } catch (err: any) {
       setActionError(err.message || 'Error al cambiar rol.');
     }
   };
 
-  const handleDeleteUser = (email: string) => {
-    if (!window.confirm(`¿Estás seguro de eliminar permanentemente a ${email}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+  const handleConfirmDelete = async (email: string) => {
+    setPendingDeleteEmail(null);
     setActionError(null);
     setActionSuccess(null);
     try {
+      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        await deleteUserFromFirestore(targetUser.id);
+      }
       deleteUser(email);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Usuario ${email} eliminado permanentemente del sistema.`);
+      setActionSuccess(`Usuario ${email} eliminado permanentemente de Firestore.`);
     } catch (err: any) {
       setActionError(err.message || 'Error al eliminar usuario.');
     }
   };
 
-  const handleToggleRequireApproval = () => {
+  const handleToggleRequireApproval = async () => {
     const nextVal = !requireApproval;
     setRequireApproval(nextVal);
+    try {
+      await updateAuthSettingsInFirestore({ requireAdminApproval: nextVal }, currentUser.email);
+    } catch (err) {
+      console.warn('Error al sincronizar política en Firestore:', err);
+    }
     updateAuthSettings({ requireAdminApproval: nextVal });
     setActionSuccess(
       nextVal
-        ? 'Política activada: Nuevos usuarios requerirán tu aprobación antes de acceder.'
-        : 'Política desactivada: Nuevos usuarios tendrán acceso inmediato al registrarse.'
+        ? 'Política guardada en Firestore: Nuevos usuarios requerirán tu aprobación antes de acceder.'
+        : 'Política guardada en Firestore: Nuevos usuarios tendrán acceso inmediato al registrarse.'
     );
   };
 
-  const handleAddUserSubmit = (e: React.FormEvent) => {
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionError(null);
     setActionSuccess(null);
     try {
-      addUserManually(newEmail, newName, newRole, 'ACTIVE');
+      const added = addUserManually(newEmail, newName, newRole, 'ACTIVE');
+      try {
+        await syncUserProfile(
+          {
+            uid: added.id,
+            email: added.email,
+            displayName: added.name,
+            photoURL: '',
+          } as any,
+          newRole,
+          'ACTIVE'
+        );
+      } catch (fErr) {
+        console.warn('Error al sincronizar usuario manual en Firestore:', fErr);
+      }
       setNewEmail('');
       setNewName('');
       setIsAddingUser(false);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Usuario ${newEmail} agregado y autorizado con éxito.`);
+      setActionSuccess(`Usuario ${newEmail} registrado y sincronizado en Firestore.`);
     } catch (err: any) {
       setActionError(err.message || 'Error al añadir usuario.');
     }
@@ -315,10 +429,8 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     document.body.removeChild(a);
   };
 
-  const handleClearLogs = () => {
-    if (!window.confirm('¿Deseas vaciar la pista de auditoría de seguridad? Se mantendrá constancia de este vaciado.')) {
-      return;
-    }
+  const handleConfirmClearLogs = () => {
+    setIsClearingLogsModal(false);
     clearSecurityAuditLog();
     setAuditLogs(getSecurityAuditLog());
     setActionSuccess('Registro de auditoría vaciado.');
@@ -336,16 +448,31 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               <ShieldCheck className="h-6 w-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
                   Panel de Control y Seguridad Mbox_Ec
                 </h2>
                 <span className="rounded-full bg-[#FF1A24]/20 border border-[#FF1A24]/40 px-2.5 py-0.5 text-[10px] font-bold text-[#FF1A24] uppercase">
                   Super Admin
                 </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                    isFirestoreConnected
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-neutral-800 border-neutral-700 text-neutral-400'
+                  }`}
+                  title="Estado de conexión en tiempo real con la base de datos de Google Cloud Firestore"
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isFirestoreConnected ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'
+                    }`}
+                  />
+                  <span>{isFirestoreConnected ? 'Firestore en Vivo' : 'Base de Datos Local'}</span>
+                </span>
               </div>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Control de permanencia, gestión de accesos y blindaje multicapa de la plataforma.
+                Control de permanencia, gestión de accesos y blindaje multicapa sincronizado con Firestore.
               </p>
             </div>
           </div>
@@ -734,14 +861,34 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                                   </button>
                                 )}
 
-                                {/* Eliminar definitivamente */}
-                                <button
-                                  onClick={() => handleDeleteUser(user.email)}
-                                  className="p-1.5 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-900 transition cursor-pointer"
-                                  title="Eliminar permanentemente"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                {/* Eliminar definitivamente con confirmación en línea */}
+                                {pendingDeleteEmail === user.email ? (
+                                  <div className="flex items-center gap-1 bg-red-950/60 p-1 rounded-lg border border-red-800">
+                                    <span className="text-[10px] text-red-300 font-bold px-1">¿Borrar?</span>
+                                    <button
+                                      onClick={() => handleConfirmDelete(user.email)}
+                                      className="rounded bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 text-[10px] font-bold transition cursor-pointer"
+                                      title="Confirmar eliminación permanente de Firestore"
+                                    >
+                                      Sí
+                                    </button>
+                                    <button
+                                      onClick={() => setPendingDeleteEmail(null)}
+                                      className="rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-1.5 py-0.5 text-[10px] transition cursor-pointer"
+                                      title="Cancelar"
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setPendingDeleteEmail(user.email)}
+                                    className="p-1.5 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-900 transition cursor-pointer"
+                                    title="Eliminar permanentemente de Firestore"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -1064,14 +1211,32 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                     <span>Exportar JSON</span>
                   </button>
 
-                  <button
-                    onClick={handleClearLogs}
-                    className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-400 hover:text-red-400 transition cursor-pointer"
-                    title="Vaciar log"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Vaciar</span>
-                  </button>
+                  {isClearingLogsModal ? (
+                    <div className="flex items-center gap-1 bg-red-950/70 border border-red-800 p-1 rounded-xl">
+                      <span className="text-[10px] text-red-300 font-bold px-1">¿Vaciar log?</span>
+                      <button
+                        onClick={handleConfirmClearLogs}
+                        className="rounded bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 text-[10px] font-bold transition cursor-pointer"
+                      >
+                        Sí
+                      </button>
+                      <button
+                        onClick={() => setIsClearingLogsModal(false)}
+                        className="rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-1.5 py-0.5 text-[10px] transition cursor-pointer"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setIsClearingLogsModal(true)}
+                      className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-400 hover:text-red-400 transition cursor-pointer"
+                      title="Vaciar log"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Vaciar</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

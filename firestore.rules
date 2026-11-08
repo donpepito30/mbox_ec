@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Bloqueo global de seguridad por defecto
+    // Bloqueo global de seguridad por defecto (Zero-Trust)
     match /{document=**} {
       allow read, write: if false;
     }
@@ -13,6 +13,13 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'jj863620@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     function isValidId(id) {
@@ -29,11 +36,14 @@ service cloud.firestore {
 
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'status', 'statusReason', 'createdAt', 'updatedAt'])
         && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
         && data.email is string && data.email.size() > 0 && data.email.size() <= 256
         && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
         && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024))
+        && (!('role' in data) || (data.role == 'SUPER_ADMIN' || data.role == 'ADMIN' || data.role == 'USER'))
+        && (!('status' in data) || (data.status == 'ACTIVE' || data.status == 'PENDING' || data.status == 'SUSPENDED'))
+        && (!('statusReason' in data) || (data.statusReason is string && data.statusReason.size() <= 256))
         && data.createdAt is string && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
@@ -52,13 +62,42 @@ service cloud.firestore {
         && data.addedAt is string && data.addedAt.size() <= 64;
     }
 
-    // Reglas de seguridad para perfiles de usuario autenticados
+    function isValidAuthSettings(data) {
+      return data.keys().hasAll(['requireAdminApproval', 'maintenanceMode', 'updatedAt'])
+        && data.keys().hasOnly(['requireAdminApproval', 'maintenanceMode', 'updatedAt', 'updatedBy'])
+        && data.requireAdminApproval is bool
+        && data.maintenanceMode is bool
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 256));
+    }
+
+    function isValidSecurityLog(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'type', 'severity', 'message'])
+        && data.keys().hasOnly(['id', 'timestamp', 'type', 'severity', 'message', 'emailMasked'])
+        && data.id is string && data.id.size() <= 128
+        && data.timestamp is string && data.timestamp.size() <= 64
+        && data.type is string && data.type.size() <= 64
+        && (data.severity == 'INFO' || data.severity == 'WARN' || data.severity == 'CRITICAL')
+        && data.message is string && data.message.size() <= 512
+        && (!('emailMasked' in data) || (data.emailMasked is string && data.emailMasked.size() <= 128));
+    }
+
+    // Reglas de seguridad para perfiles de usuario y administracion RBAC
     match /users/{userId} {
-      allow get: if isOwner(userId) && isValidId(userId);
-      allow list: if false; // Proteccion de PII: no permitir listar correos de otros usuarios
-      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == userId;
-      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
-      allow delete: if isOwner(userId) && isValidId(userId);
+      allow get: if (isOwner(userId) || isSuperAdmin()) && isValidId(userId);
+      allow list: if isSuperAdmin();
+      allow create: if ((isOwner(userId) && incoming().uid == userId) || isSuperAdmin()) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isValidId(userId) && isValidUserProfile(incoming()) && (
+        isSuperAdmin() ||
+        (
+          isOwner(userId) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          (!('role' in incoming()) || incoming().role == existing().role) &&
+          (!('status' in incoming()) || incoming().status == existing().status)
+        )
+      );
+      allow delete: if (isOwner(userId) || isSuperAdmin()) && isValidId(userId);
 
       // Subcoleccion privada de favoritos y Mi Lista
       match /favorites/{favoriteId} {
@@ -67,6 +106,21 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(userId) && isValidId(favoriteId) && isValidFavorite(incoming()) && incoming().userId == userId;
         allow update: if isOwner(userId) && isValidId(userId) && isValidId(favoriteId) && isValidFavorite(incoming()) && incoming().userId == userId && incoming().mediaId == existing().mediaId && incoming().addedAt == existing().addedAt;
       }
+    }
+
+    // Configuraciones globales de acceso y politicas (solo Super Admin puede escribir)
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isSuperAdmin();
+      allow create, update: if isSuperAdmin() && isValidId(settingId) && isValidAuthSettings(incoming());
+      allow delete: if isSuperAdmin() && isValidId(settingId);
+    }
+
+    // Registro de auditoria de seguridad inmutable
+    match /security_logs/{logId} {
+      allow get, list: if isSuperAdmin() && isValidId(logId);
+      allow create: if isSignedIn() && isValidId(logId) && isValidSecurityLog(incoming());
+      allow update, delete: if isSuperAdmin() && isValidId(logId);
     }
   }
 }

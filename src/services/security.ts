@@ -105,7 +105,7 @@ export function normalizeGoogleEmail(rawEmail: string): {
 }
 
 /**
- * Enmascara un correo para registros de auditoría y visualización segura (ej. jj863620@gmail.com -> jj****20@gmail.com)
+ * Enmascara un correo para registros de auditoría y visualización segura (ej. usuario@gmail.com -> us****io@gmail.com)
  */
 export function maskEmail(email?: string): string {
   if (!email || !email.includes('@')) return 'anónimo';

@@ -28,7 +28,8 @@ import {
   isSuperAdmin,
   User,
 } from '../services/auth.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { maskEmail } from '../services/security.ts';
+import { loginWithGoogle, checkRedirectAuthResult } from '../services/firebase.ts';
 import { CinemaBoxLogo } from './CinemaBoxLogo.tsx';
 
 interface GoogleAuthGateProps {
@@ -54,7 +55,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
   const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [suspendedUser, setSuspendedUser] = useState<User | null>(null);
 
-  // Estado para verificación de PIN cuando el Propietario inicia sesión vía Google Popup
+  // Estado para verificación de PIN cuando una cuenta administrativa inicia sesión vía Google Popup
   const [pendingSuperAdmin, setPendingSuperAdmin] = useState<{
     uid: string;
     email: string;
@@ -62,8 +63,8 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     photoURL: string | null;
   } | null>(null);
 
-  // Detecta si el correo ingresado manualmente es la cuenta de Super Admin
-  const isOwnerEmail = isSuperAdmin(googleEmail);
+  // Estado para verificación de PIN en flujo de correo manual
+  const [manualPinEmail, setManualPinEmail] = useState<string | null>(null);
 
   // Verificar si ya hay una sesión en espera o suspendida
   useEffect(() => {
@@ -75,7 +76,32 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
         setSuspendedUser(active);
       }
     }
-  }, []);
+
+    // Verificar si el usuario proviene de un flujo de redirección de Google
+    checkRedirectAuthResult()
+      .then(async (firebaseUser) => {
+        if (firebaseUser && firebaseUser.email) {
+          if (isSuperAdmin(firebaseUser.email)) {
+            setPendingSuperAdmin({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+            });
+            setSuccessMessage('Identidad verificada con Google. Ingresa tu PIN de Seguridad.');
+          } else {
+            const user = await authenticateWithVerifiedGoogleUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+            });
+            onSuccess(user);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [onSuccess]);
 
   // Verificar limitación de intentos y PIN al cargar
   useEffect(() => {
@@ -111,6 +137,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
     setPendingSuperAdmin(null);
+    setManualPinEmail(null);
     setIsGooglePopupLoading(true);
 
     try {
@@ -119,7 +146,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
         throw new Error('La cuenta de Google seleccionada no proporcionó un correo electrónico válido.');
       }
 
-      // Si la cuenta es del Propietario / Super Admin, solicitar su PIN Maestro de Seguridad
+      // Si la cuenta requiere PIN de Seguridad adicional
       if (isSuperAdmin(firebaseUser.email)) {
         setPendingSuperAdmin({
           uid: firebaseUser.uid,
@@ -127,7 +154,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
           displayName: firebaseUser.displayName,
           photoURL: firebaseUser.photoURL,
         });
-        setSuccessMessage('Cuenta de Propietario autenticada con Google. Ingresa tu PIN de Seguridad.');
+        setSuccessMessage('Identidad verificada con Google. Ingresa tu PIN de Seguridad.');
         return;
       }
 
@@ -159,7 +186,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
       if (err.code === 'auth/popup-closed-by-user') {
         setErrorMessage('Autenticación cancelada: La ventana de Google se cerró antes de completar.');
       } else if (err.code === 'auth/popup-blocked') {
-        setErrorMessage('Tu navegador bloqueó la ventana emergente de Google. Por favor habilita ventanas emergentes o usa el acceso manual.');
+        setErrorMessage('El navegador bloqueó la ventana emergente de Google. Puedes ingresar directamente con tu correo a continuación.');
       } else {
         setErrorMessage(err.message || 'Error en la autenticación con Google.');
       }
@@ -169,13 +196,13 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
   };
 
   /**
-   * Confirmación del PIN Maestro tras autenticarse con la cuenta de Google del Propietario
+   * Confirmación del PIN tras autenticarse con la cuenta de Google
    */
   const handleConfirmSuperAdminPin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingSuperAdmin) return;
     if (!adminPin.trim()) {
-      setErrorMessage('Ingresa el PIN Maestro de Seguridad del Propietario.');
+      setErrorMessage('Ingresa el PIN de Seguridad.');
       return;
     }
 
@@ -187,12 +214,12 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
         adminPin.trim()
       );
 
-      setSuccessMessage(`Bienvenido, Propietario ${user.name}`);
+      setSuccessMessage(`Acceso concedido. Bienvenido, ${user.name}`);
       setTimeout(() => {
         onSuccess(user);
       }, 500);
     } catch (err: any) {
-      setErrorMessage(err.message || 'PIN Maestro incorrecto.');
+      setErrorMessage(err.message || 'PIN de Seguridad incorrecto.');
     } finally {
       setIsLoading(false);
     }
@@ -208,24 +235,36 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     setPendingUser(null);
     setSuspendedUser(null);
 
-    const validation = validateGoogleEmail(googleEmail);
+    const targetEmail = manualPinEmail || googleEmail;
+    const validation = validateGoogleEmail(targetEmail);
     if (!validation.isValid) {
       setErrorMessage(validation.error || 'Solo se permiten correos oficiales de Google (@gmail.com).');
       return;
     }
 
-    if (isOwnerEmail && !adminPin.trim()) {
-      setErrorMessage('Esta es la cuenta del Propietario. Ingresa tu PIN de Seguridad.');
+    const cleanEmail = validation.cleanEmail;
+
+    // Si la cuenta requiere PIN de seguridad adicional y aún no estamos en el paso del PIN
+    if (isSuperAdmin(cleanEmail) && !manualPinEmail) {
+      setManualPinEmail(cleanEmail);
+      setAdminPin('');
+      return;
+    }
+
+    // Si la cuenta requiere PIN de seguridad
+    const pinToSubmit = isSuperAdmin(cleanEmail) ? adminPin.trim() : undefined;
+    if (isSuperAdmin(cleanEmail) && !pinToSubmit) {
+      setErrorMessage('Ingresa tu PIN de Seguridad.');
       return;
     }
 
     setIsLoading(true);
     try {
       const user = await authenticateWithGoogle(
-        validation.cleanEmail,
+        cleanEmail,
         userName,
         undefined,
-        isOwnerEmail ? adminPin.trim() : undefined
+        pinToSubmit
       );
 
       if (user.status === 'PENDING') {
@@ -276,6 +315,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
     setPendingUser(null);
     setSuspendedUser(null);
     setPendingSuperAdmin(null);
+    setManualPinEmail(null);
     setGoogleEmail('');
     setAdminPin('');
     setErrorMessage(null);
@@ -374,7 +414,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 Cuenta en Espera de Aprobación
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
-                Tu cuenta (<span className="text-white font-mono">{pendingUser.email}</span>) fue registrada. El Administrador debe autorizar tu acceso antes de ingresar.
+                Tu cuenta (<span className="text-white font-mono">{maskEmail(pendingUser.email)}</span>) fue registrada. El Administrador debe autorizar tu acceso antes de ingresar.
               </p>
             </div>
 
@@ -409,7 +449,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 Acceso Suspendido
               </h3>
               <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
-                La cuenta (<span className="text-white font-mono">{suspendedUser.email}</span>) no tiene permisos de acceso activos.
+                La cuenta (<span className="text-white font-mono">{maskEmail(suspendedUser.email)}</span>) no tiene permisos de acceso activos.
               </p>
               {suspendedUser.statusReason && (
                 <p className="text-xs text-red-400 pt-1 font-medium">
@@ -426,39 +466,31 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
               Intentar con otra cuenta
             </button>
           </div>
-        ) : pendingSuperAdmin ? (
-          /* CASO C: AUTENTICACIÓN GOOGLE DEL PROPIETARIO -> SOLICITUD DE PIN MAESTRO */
-          <form onSubmit={handleConfirmSuperAdminPin} className="mt-6 space-y-4 animate-in fade-in">
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-red-950/30 border border-red-900/50">
-              {pendingSuperAdmin.photoURL ? (
-                <img
-                  src={pendingSuperAdmin.photoURL}
-                  alt=""
-                  className="h-10 w-10 rounded-full border border-red-500 object-cover"
-                />
-              ) : (
-                <div className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center font-bold text-white">
-                  M
-                </div>
-              )}
+        ) : manualPinEmail ? (
+          /* CASO C1: VERIFICACIÓN DE PIN EN INGRESO MANUAL */
+          <form onSubmit={handleManualAuthenticate} className="mt-6 space-y-4 animate-in fade-in">
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-neutral-900/90 border border-neutral-800">
+              <div className="h-10 w-10 rounded-full bg-red-950/60 border border-red-800/60 flex items-center justify-center font-bold text-red-400">
+                <KeyRound className="h-5 w-5" />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-white truncate">
-                    {pendingSuperAdmin.displayName || 'Propietario'}
+                    Verificación de Seguridad
                   </span>
-                  <span className="text-[10px] uppercase font-mono bg-red-600/40 text-red-300 px-1.5 py-0.2 rounded font-bold">
-                    Super Admin
+                  <span className="text-[10px] uppercase font-mono bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded font-medium border border-neutral-700">
+                    2FA
                   </span>
                 </div>
                 <p className="text-[11px] font-mono text-neutral-400 truncate">
-                  {pendingSuperAdmin.email}
+                  {maskEmail(manualPinEmail)}
                 </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
-                <span>PIN Maestro de Seguridad</span>
+                <span>PIN de Seguridad</span>
                 <span className="text-[10px] text-neutral-500">6 dígitos</span>
               </label>
               <div className="relative">
@@ -468,8 +500,8 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                   autoFocus
                   value={adminPin}
                   onChange={(e) => setAdminPin(e.target.value)}
-                  placeholder="Introduce tu PIN Maestro"
-                  className="w-full rounded-xl border border-red-800/80 bg-neutral-900 pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-500 focus:outline-none transition"
+                  placeholder="Introduce tu PIN de Seguridad"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-500 focus:outline-none transition"
                 />
                 <button
                   type="button"
@@ -492,7 +524,91 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 ) : (
                   <>
                     <ShieldCheck className="h-4 w-4" />
-                    <span>Confirmar y Acceder como Propietario</span>
+                    <span>Verificar y Acceder</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setManualPinEmail(null);
+                  setAdminPin('');
+                  setErrorMessage(null);
+                }}
+                className="text-xs text-neutral-400 hover:text-white transition py-1 cursor-pointer text-center"
+              >
+                Volver atrás
+              </button>
+            </div>
+          </form>
+        ) : pendingSuperAdmin ? (
+          /* CASO C2: AUTENTICACIÓN GOOGLE -> VERIFICACIÓN DE PIN */
+          <form onSubmit={handleConfirmSuperAdminPin} className="mt-6 space-y-4 animate-in fade-in">
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-neutral-900/90 border border-neutral-800">
+              {pendingSuperAdmin.photoURL ? (
+                <img
+                  src={pendingSuperAdmin.photoURL}
+                  alt=""
+                  className="h-10 w-10 rounded-full border border-red-500/50 object-cover"
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-red-950/60 border border-red-800/60 flex items-center justify-center font-bold text-red-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-white truncate">
+                    {pendingSuperAdmin.displayName || 'Cuenta Verificada'}
+                  </span>
+                  <span className="text-[10px] uppercase font-mono bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded font-medium border border-neutral-700">
+                    Seguridad
+                  </span>
+                </div>
+                <p className="text-[11px] font-mono text-neutral-400 truncate">
+                  {maskEmail(pendingSuperAdmin.email)}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                <span>PIN de Seguridad</span>
+                <span className="text-[10px] text-neutral-500">6 dígitos</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  required
+                  autoFocus
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value)}
+                  placeholder="Introduce tu PIN de Seguridad"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-500 focus:outline-none transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-white"
+                >
+                  {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isLoading || !adminPin.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold text-xs py-3 px-4 shadow-xl transition cursor-pointer"
+              >
+                {isLoading ? (
+                  <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <>
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Confirmar y Acceder</span>
                   </>
                 )}
               </button>
@@ -553,7 +669,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
             <div className="relative flex items-center justify-center">
               <div className="w-full border-t border-neutral-800" />
               <span className="absolute bg-neutral-950 px-3 text-[10px] uppercase font-mono text-neutral-500 tracking-wider">
-                o ingresa tu correo
+                o ingresa con tu correo
               </span>
             </div>
 
@@ -583,51 +699,19 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                 </div>
               </div>
 
-              {/* Si es el Propietario, se solicita el PIN Maestro */}
-              {isOwnerEmail ? (
-                <div className="space-y-1.5 p-3 rounded-2xl bg-red-950/20 border border-red-900/40 animate-in fade-in">
-                  <div className="flex items-center justify-between text-xs font-bold text-red-400">
-                    <span className="flex items-center gap-1.5">
-                      <KeyRound className="h-3.5 w-3.5" />
-                      <span>PIN del Propietario</span>
-                    </span>
-                    <span className="text-[10px] uppercase font-mono bg-red-600/30 px-1.5 py-0.5 rounded text-red-300">
-                      Super Admin
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPin ? 'text' : 'password'}
-                      required
-                      value={adminPin}
-                      onChange={(e) => setAdminPin(e.target.value)}
-                      placeholder="Introduce tu PIN Maestro"
-                      className="w-full rounded-xl border border-red-800/80 bg-neutral-900 pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-red-500 focus:outline-none transition"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="absolute right-3 top-2.5 text-neutral-400 hover:text-white"
-                    >
-                      {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Nombre de Usuario Opcional */
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-300">
-                    Nombre o Alias (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Tu nombre"
-                    className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
-                  />
-                </div>
-              )}
+              {/* Nombre de Usuario Opcional */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-300">
+                  Nombre o Alias (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Tu nombre"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/90 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
+                />
+              </div>
 
               {/* Botón de Enviar Formulario */}
               <button

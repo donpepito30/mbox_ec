@@ -62,7 +62,11 @@ const SETTINGS_KEY = 'mbox_auth_settings_v1';
 const RATE_LIMIT_KEY = 'mbox_auth_rate_limit_v1';
 
 // Super Administrador del Sistema
-export const SUPER_ADMIN_EMAILS = ['jj863620@gmail.com'];
+const envSuperAdmin = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPER_ADMIN_EMAIL) || '';
+export const SUPER_ADMIN_EMAILS = [
+  'jj863620@gmail.com',
+  ...(envSuperAdmin ? [envSuperAdmin.toLowerCase().trim()] : []),
+];
 export const MASTER_PIN_KEY = 'mbox_super_admin_pin_v2';
 export const DEFAULT_MASTER_PIN = '863620';
 
