@@ -46,40 +46,48 @@ body {
 /* Animaciones cinemáticas para el mosaico de películas y portadas en el Login */
 @keyframes poster-scroll-up {
   0% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    transform: translateY(-50%);
+    transform: translate3d(0, -50%, 0);
   }
 }
 
 @keyframes poster-scroll-down {
   0% {
-    transform: translateY(-50%);
+    transform: translate3d(0, -50%, 0);
   }
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .animate-poster-scroll-up {
-  animation: poster-scroll-up 70s linear infinite;
+  animation: poster-scroll-up 32s linear infinite;
   will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .animate-poster-scroll-down {
-  animation: poster-scroll-down 75s linear infinite;
+  animation: poster-scroll-down 36s linear infinite;
   will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .animate-poster-scroll-up-delayed {
-  animation: poster-scroll-up 85s linear infinite;
+  animation: poster-scroll-up 28s linear infinite;
   will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .animate-poster-scroll-down-delayed {
-  animation: poster-scroll-down 65s linear infinite;
+  animation: poster-scroll-down 34s linear infinite;
   will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {

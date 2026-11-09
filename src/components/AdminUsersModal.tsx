@@ -261,18 +261,30 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setActionError(null);
     setActionSuccess(null);
     try {
-      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (targetUser) {
-        await updateUserStatusInFirestore(targetUser.id, newStatus);
-      }
+      // 1. Actualización local inmediata para respuesta instantánea en la interfaz
       updateUserStatus(email, newStatus);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(
-        `Estado de ${email} actualizado en Firestore y activo como ${
-          newStatus === 'ACTIVE' ? 'ACTIVO' : newStatus === 'SUSPENDED' ? 'SUSPENDIDO' : 'PENDIENTE'
-        }.`
-      );
+
+      // 2. Sincronización en la nube con Firestore
+      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        try {
+          await updateUserStatusInFirestore(targetUser.id, newStatus);
+          setActionSuccess(
+            `Estado de ${email} actualizado en Firestore y activo como ${
+              newStatus === 'ACTIVE' ? 'ACTIVO' : newStatus === 'SUSPENDED' ? 'SUSPENDIDO' : 'PENDIENTE'
+            }.`
+          );
+        } catch (fErr: any) {
+          console.warn('[Firestore Sync Warn]:', fErr?.message || fErr);
+          setActionSuccess(
+            `Estado de ${email} actualizado en este dispositivo como ${
+              newStatus === 'ACTIVE' ? 'ACTIVO' : newStatus === 'SUSPENDED' ? 'SUSPENDIDO' : 'PENDIENTE'
+            }. (Para sincronizar con la nube hacia Vercel, inicia sesión con "Continuar con Google").`
+          );
+        }
+      }
     } catch (err: any) {
       setActionError(err.message || 'Error al cambiar estado.');
     }
@@ -282,14 +294,20 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setActionError(null);
     setActionSuccess(null);
     try {
-      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (targetUser) {
-        await updateUserRoleInFirestore(targetUser.id, role);
-      }
       updateUserRole(email, role);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Rol de ${email} actualizado en Firestore a ${role}.`);
+
+      const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        try {
+          await updateUserRoleInFirestore(targetUser.id, role);
+          setActionSuccess(`Rol de ${email} actualizado en Firestore y localmente a ${role}.`);
+        } catch (fErr: any) {
+          console.warn('[Firestore Role Sync Warn]:', fErr?.message || fErr);
+          setActionSuccess(`Rol de ${email} actualizado localmente a ${role}. (Inicia sesión con Google OAuth para sincronizar en la nube).`);
+        }
+      }
     } catch (err: any) {
       setActionError(err.message || 'Error al cambiar rol.');
     }
@@ -301,13 +319,19 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setActionSuccess(null);
     try {
       const targetUser = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (targetUser) {
-        await deleteUserFromFirestore(targetUser.id);
-      }
       deleteUser(email);
       reloadData();
       if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Usuario ${email} eliminado permanentemente de Firestore.`);
+
+      if (targetUser) {
+        try {
+          await deleteUserFromFirestore(targetUser.id);
+          setActionSuccess(`Usuario ${email} eliminado permanentemente de Firestore y del sistema.`);
+        } catch (fErr: any) {
+          console.warn('[Firestore Delete Sync Warn]:', fErr?.message || fErr);
+          setActionSuccess(`Usuario ${email} purgado localmente del sistema.`);
+        }
+      }
     } catch (err: any) {
       setActionError(err.message || 'Error al eliminar usuario.');
     }
@@ -316,17 +340,23 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const handleToggleRequireApproval = async () => {
     const nextVal = !requireApproval;
     setRequireApproval(nextVal);
+    updateAuthSettings({ requireAdminApproval: nextVal });
+
     try {
       await updateAuthSettingsInFirestore({ requireAdminApproval: nextVal }, currentUser.email);
+      setActionSuccess(
+        nextVal
+          ? 'Política guardada en Firestore y localmente: Nuevos usuarios requerirán tu aprobación antes de acceder.'
+          : 'Política guardada en Firestore y localmente: Nuevos usuarios tendrán acceso inmediato al registrarse.'
+      );
     } catch (err) {
-      console.warn('Error al sincronizar política en Firestore:', err);
+      console.warn('Aviso: Guardado localmente. Error en Firestore:', err);
+      setActionSuccess(
+        nextVal
+          ? 'Política activa localmente: Nuevos usuarios requerirán tu aprobación antes de acceder.'
+          : 'Política activa localmente: Nuevos usuarios tendrán acceso inmediato al registrarse.'
+      );
     }
-    updateAuthSettings({ requireAdminApproval: nextVal });
-    setActionSuccess(
-      nextVal
-        ? 'Política guardada en Firestore: Nuevos usuarios requerirán tu aprobación antes de acceder.'
-        : 'Política guardada en Firestore: Nuevos usuarios tendrán acceso inmediato al registrarse.'
-    );
   };
 
   const handleAddUserSubmit = async (e: React.FormEvent) => {
@@ -335,6 +365,12 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setActionSuccess(null);
     try {
       const added = addUserManually(newEmail, newName, newRole, 'ACTIVE');
+      setNewEmail('');
+      setNewName('');
+      setIsAddingUser(false);
+      reloadData();
+      if (onUserUpdated) onUserUpdated();
+
       try {
         await syncUserProfile(
           {
@@ -346,15 +382,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
           newRole,
           'ACTIVE'
         );
+        setActionSuccess(`Usuario ${added.email} registrado y sincronizado en Firestore.`);
       } catch (fErr) {
-        console.warn('Error al sincronizar usuario manual en Firestore:', fErr);
+        console.warn('Aviso: Usuario registrado localmente. Firestore:', fErr);
+        setActionSuccess(`Usuario ${added.email} registrado localmente con éxito.`);
       }
-      setNewEmail('');
-      setNewName('');
-      setIsAddingUser(false);
-      reloadData();
-      if (onUserUpdated) onUserUpdated();
-      setActionSuccess(`Usuario ${newEmail} registrado y sincronizado en Firestore.`);
     } catch (err: any) {
       setActionError(err.message || 'Error al añadir usuario.');
     }
@@ -526,6 +558,21 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
             )}
           </button>
         </div>
+
+        {/* Aviso de Modo de Sincronización en la Nube */}
+        {!isFirestoreConnected && (
+          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-200 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-300">
+                Panel en Modo Local (Base de Datos en este dispositivo)
+              </p>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                Los cambios se almacenan de forma segura en este navegador. Para que los usuarios y roles se sincronicen en la nube de Google Cloud Firestore y aparezcan en tus despliegues externos de Vercel, inicia sesión con <strong>"Continuar con Google"</strong> usando tu cuenta oficial de Super Administrador.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Notificaciones */}
         {actionError && (

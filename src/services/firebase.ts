@@ -92,13 +92,18 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function isFirebaseAuthActive(): boolean {
+  return Boolean(auth && auth.currentUser);
+}
+
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
 ): never {
+  const rawMsg = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: rawMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -114,8 +119,15 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('[Firestore Error Details]:', JSON.stringify(errInfo));
+
+  if (rawMsg.includes('insufficient permissions') || rawMsg.includes('permission-denied') || rawMsg.includes('PERMISSION_DENIED')) {
+    throw new Error('Permisos insuficientes en Firestore. Para administrar usuarios en la nube, debes iniciar sesión con Google OAuth como Super Administrador.');
+  }
+  if (rawMsg.includes('offline') || rawMsg.includes('unavailable') || rawMsg.includes('the client is offline')) {
+    throw new Error('Firestore en la nube está temporalmente fuera de línea. Operando en almacenamiento local.');
+  }
+  throw new Error(`Error en base de datos (${operationType}): ${rawMsg}`);
 }
 
 /**
