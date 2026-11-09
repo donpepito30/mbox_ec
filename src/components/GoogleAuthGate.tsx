@@ -419,11 +419,11 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
           FONDO CINEMÁTICO: MOSAICO DE PÓSTERES Y PORTADAS (100% INERTE Y SEGURO)
           ========================================================================= */}
       <div 
-        className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none bg-[#050508]"
+        className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none bg-[#060608]"
         aria-hidden="true"
       >
-        {/* Grilla inclinada con columnas de marquesina infinita */}
-        <div className="absolute -inset-[30%] flex justify-center gap-3 sm:gap-4 md:gap-5 -rotate-2 scale-105 opacity-70 sm:opacity-75 transition-opacity duration-700">
+        {/* Grilla inclinada con columnas de marquesina continua y vibrante */}
+        <div className="absolute -inset-[30%] flex justify-center gap-3.5 sm:gap-4 md:gap-5 -rotate-2 scale-105 opacity-95 sm:opacity-100 transition-opacity duration-700">
           {posterColumns.map((col, colIdx) => {
             const animClass =
               colIdx % 4 === 0
@@ -445,14 +445,14 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
             return (
               <div
                 key={`col-${colIdx}`}
-                className={`${visibilityClass} flex-col gap-3 sm:gap-4 shrink-0 w-28 sm:w-36 md:w-44 lg:w-48 ${animClass}`}
+                className={`${visibilityClass} flex-col gap-3.5 sm:gap-4 shrink-0 w-28 sm:w-36 md:w-44 lg:w-48 ${animClass}`}
                 style={{ willChange: 'transform' }}
               >
-                {/* Repetición fluida para scroll infinito continuo */}
-                {[...col, ...col].map((item, itemIdx) => (
+                {/* Cuadruplicación de elementos para garantizar altura continua infinita (>6000px) sin saltos ni cortes */}
+                {[...col, ...col, ...col, ...col].map((item, itemIdx) => (
                   <div
                     key={`item-${colIdx}-${item.id}-${itemIdx}`}
-                    className={`relative rounded-2xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-700/50 shrink-0 ${
+                    className={`relative rounded-2xl overflow-hidden shadow-[0_10px_25px_rgba(0,0,0,0.7)] bg-neutral-900 border border-white/10 shrink-0 ${
                       item.type === 'backdrop' ? 'aspect-[16/9]' : 'aspect-[2/3]'
                     }`}
                   >
@@ -461,13 +461,12 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
                       alt=""
                       decoding="async"
                       referrerPolicy="no-referrer"
-                      className="h-full w-full object-cover filter brightness-95 contrast-105"
+                      className="h-full w-full object-cover filter brightness-100 contrast-105"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80';
                       }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25 pointer-events-none" />
                   </div>
                 ))}
               </div>
@@ -476,18 +475,18 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
         </div>
 
         {/* Resplandor cinemático central (Cinema Box Red Ambient Glow) */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-[#FF1A24]/15 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-[#FF1A24]/18 rounded-full blur-[150px] pointer-events-none" />
 
-        {/* Gradiente Radial Equilibrado: Oscurece el centro para perfecta legibilidad de la tarjeta sin apagar los pósteres laterales */}
+        {/* Gradiente Radial Sutil: Brinda contraste al centro para la tarjeta sin apagar las portadas alrededor */}
         <div 
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'radial-gradient(circle at 50% 50%, rgba(4,4,6,0.85) 0%, rgba(4,4,6,0.60) 40%, rgba(4,4,6,0.25) 70%, rgba(4,4,6,0.80) 100%)',
+            background: 'radial-gradient(circle at 50% 50%, rgba(6,6,9,0.55) 0%, rgba(6,6,9,0.30) 40%, rgba(6,6,9,0.12) 70%, rgba(6,6,9,0.35) 100%)',
           }}
         />
 
-        {/* Viñeta sutil en bordes superior e inferior */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/85 pointer-events-none" />
+        {/* Viñeta sutil y elegante en bordes extremos */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/40 pointer-events-none" />
       </div>
 
       {/* =========================================================================
