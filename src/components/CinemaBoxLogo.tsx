@@ -16,21 +16,21 @@ export const CinemaBoxLogo: React.FC<CinemaBoxLogoProps> = ({
   className = '',
 }) => {
   const iconDimensions = {
-    sm: { width: 32, height: 32 },
-    md: { width: 40, height: 40 },
-    lg: { width: 52, height: 52 },
-    xl: { width: 68, height: 68 },
+    sm: { width: 28, height: 28 },
+    md: { width: 34, height: 34 },
+    lg: { width: 48, height: 48 },
+    xl: { width: 64, height: 64 },
   }[size];
 
   const textClasses = {
-    sm: 'text-xl',
-    md: 'text-2xl sm:text-3xl',
-    lg: 'text-3xl sm:text-4xl',
-    xl: 'text-4xl sm:text-5xl',
+    sm: 'text-base sm:text-lg',
+    md: 'text-lg sm:text-2xl md:text-3xl',
+    lg: 'text-2xl sm:text-3xl md:text-4xl',
+    xl: 'text-3xl sm:text-4xl md:text-5xl',
   }[size];
 
   return (
-    <div className={`inline-flex items-center gap-3 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2 sm:gap-3 select-none ${className}`}>
       {/* Isotipo Cinema Box Vectorial */}
       <div className="relative shrink-0 flex items-center justify-center">
         <svg

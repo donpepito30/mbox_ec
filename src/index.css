@@ -7,11 +7,33 @@
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: #000000; /* Obsidian Black */
-  color: #f8fafc;
+html {
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  background-color: #08080A;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background-color: #08080A;
+  color: #f8fafc;
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Soporte de Navegación D-pad y Control Remoto para Android TV */

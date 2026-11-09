@@ -35,12 +35,12 @@ export const PWAInstallButton: React.FC = () => {
     <>
       <button
         onClick={handleInstallClick}
-        className="flex items-center gap-1.5 rounded-xl bg-[#FF1A24] hover:bg-[#FF242E] px-3 py-1.5 text-xs font-bold text-white shadow-md shadow-red-950/60 transition cursor-pointer"
+        className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-[#FF1A24] hover:bg-[#FF242E] px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white shadow-md shadow-red-950/60 transition cursor-pointer shrink-0"
         title="Instalar Mbox_Ec en tu dispositivo móvil o computadora"
       >
         <Download className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Instalar App</span>
-        <span className="sm:hidden">Instalar</span>
+        <span className="sm:hidden text-[11px]">Instalar</span>
       </button>
 
       {/* Modal Visual de Instalación PWA con la Nueva Imagen Oficial */}

@@ -258,7 +258,7 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-[100dvh] bg-[#08080A] text-neutral-100 flex flex-col font-sans selection:bg-[#FF1A24] selection:text-white"
+      className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#08080A] text-neutral-100 flex flex-col font-sans selection:bg-[#FF1A24] selection:text-white"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
@@ -266,8 +266,8 @@ export default function App() {
     >
       
       {/* 1. Header Oficial Mbox_Ec con Isotipo Cinema Box 3D */}
-      <header className="sticky top-0 z-40 w-full border-b border-neutral-900 bg-[#08080A]/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-40 w-full max-w-full border-b border-neutral-900 bg-[#08080A]/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 w-full">
           
           {/* Isotipo Oficial Cinema Box */}
           <div 
@@ -276,14 +276,14 @@ export default function App() {
               setSelectedMediaType('all');
               setSearchQuery('');
             }}
-            className="cursor-pointer group flex items-center"
+            className="cursor-pointer group flex items-center shrink-0"
             title="Mbox_Ec: Tu cine en casa"
           >
             <CinemaBoxLogo size="md" />
           </div>
 
-          {/* Navegación Principal 100% en Español */}
-          <nav className="flex items-center gap-2 sm:gap-4 md:gap-5 text-sm font-semibold">
+          {/* Navegación Principal en Escritorio (Oculta en móviles para evitar colapso visual; delegada al Bottom Nav Bar) */}
+          <nav className="hidden md:flex items-center gap-4 lg:gap-5 text-sm font-semibold">
             <button
               onClick={() => {
                 setWatchingItem(null);
@@ -339,7 +339,7 @@ export default function App() {
               }`}
             >
               <Bookmark className="h-3.5 w-3.5 text-[#FF1A24]" />
-              <span className="hidden sm:inline">Mi Lista</span>
+              <span>Mi Lista</span>
               {currentUser?.watchlist && currentUser.watchlist.length > 0 && (
                 <span className="rounded-full bg-neutral-900 border border-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-neutral-300">
                   {currentUser.watchlist.length}
@@ -355,17 +355,23 @@ export default function App() {
                 title="Herramienta de Administración y Control Total de Usuarios"
               >
                 <Crown className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                <span className="hidden md:inline">Panel Admin</span>
+                <span>Panel Admin</span>
               </button>
             )}
+          </nav>
+
+          {/* Acciones Derecha (Perfil, PWA y Cierre de Sesión) */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Botón PWA Install */}
+            <PWAInstallButton />
 
             {/* Perfil del Usuario / Propietario */}
-            <div className="flex items-center gap-2 pl-2 border-l border-neutral-800">
+            <div className="flex items-center gap-1.5 sm:gap-2 pl-1 sm:pl-2 sm:border-l sm:border-neutral-800">
               <div
                 onClick={() => {
                   if (isAdmin(currentUser)) setIsAdminModalOpen(true);
                 }}
-                className={`relative cursor-pointer group`}
+                className="relative cursor-pointer group"
                 title={
                   currentUser.role === 'SUPER_ADMIN'
                     ? 'Propietario / Super Administrador (Haz clic para abrir el panel)'
@@ -410,22 +416,19 @@ export default function App() {
               {/* Botón de Cierre de Sesión */}
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-[#FF1A24] border border-neutral-800 transition cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-[#FF1A24] border border-neutral-800 transition cursor-pointer"
                 title="Cerrar Sesión Segura"
               >
-                <LogOut className="h-3.5 w-3.5" />
+                <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             </div>
-
-            {/* Botón PWA Install */}
-            <PWAInstallButton />
-          </nav>
+          </div>
 
         </div>
       </header>
 
       {/* 2. Contenido Principal */}
-      <main className="flex-1 pb-16">
+      <main className="flex-1 pb-24 md:pb-16 w-full max-w-full overflow-x-hidden">
         
         {/* Vista A: Vista de Reproducción /watch/[id] */}
         {watchingItem ? (
@@ -602,11 +605,11 @@ export default function App() {
               {/* Barra de Filtros y Buscador */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-neutral-900">
                 
-                {/* Categorías */}
-                <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0E0F14] border border-neutral-800 rounded-xl text-xs self-start">
+                {/* Categorías con Desplazamiento Horizontal Suave en Móviles */}
+                <div className="flex items-center gap-1 p-1 bg-[#0E0F14] border border-neutral-800 rounded-xl text-xs overflow-x-auto scrollbar-none max-w-full">
                   <button
                     onClick={() => setSelectedMediaType('all')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
                       selectedMediaType === 'all'
                         ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
@@ -618,7 +621,7 @@ export default function App() {
 
                   <button
                     onClick={() => setSelectedMediaType('movie')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
                       selectedMediaType === 'movie'
                         ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
@@ -630,7 +633,7 @@ export default function App() {
 
                   <button
                     onClick={() => setSelectedMediaType('tv')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
                       selectedMediaType === 'tv'
                         ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
@@ -642,7 +645,7 @@ export default function App() {
 
                   <button
                     onClick={() => setSelectedMediaType('watchlist')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
                       selectedMediaType === 'watchlist'
                         ? 'bg-[#FF1A24] text-white shadow-md shadow-red-950'
                         : 'text-neutral-400 hover:text-white'
@@ -831,9 +834,9 @@ export default function App() {
         />
       )}
 
-      {/* BOTÓN FLOTANTE DE ACCESO RÁPIDO AL PANEL DE ADMINISTRACIÓN (SOLO PROPIETARIO) */}
+      {/* BOTÓN FLOTANTE DE ACCESO RÁPIDO AL PANEL DE ADMINISTRACIÓN (SOLO ESCRITORIO; EN MÓVIL ESTÁ EN LA BARRA INFERIOR) */}
       {isAdmin(currentUser) && (
-        <aside aria-label="Herramienta de administración" className="fixed bottom-5 left-5 z-40 animate-in fade-in">
+        <aside aria-label="Herramienta de administración" className="hidden md:block fixed bottom-5 left-5 z-40 animate-in fade-in">
           <button
             onClick={() => setIsAdminModalOpen(true)}
             className="flex items-center gap-2 rounded-2xl bg-[#0E0F14]/95 hover:bg-neutral-900 text-white border border-[#FF1A24]/60 px-4 py-2.5 shadow-2xl shadow-black backdrop-blur-md transition-all hover:scale-105 cursor-pointer text-xs font-bold"
@@ -857,8 +860,8 @@ export default function App() {
         />
       )}
 
-      {/* Footer Oficial Mbox_Ec */}
-      <footer className="border-t border-neutral-900 bg-[#08080A] py-10 text-neutral-500 text-xs text-center">
+      {/* Footer Oficial Mbox_Ec con Espaciado para la Barra Móvil */}
+      <footer className="border-t border-neutral-900 bg-[#08080A] py-10 pb-20 md:pb-10 text-neutral-500 text-xs text-center">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <CinemaBoxLogo size="sm" />
 
@@ -872,6 +875,126 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (100% Mobile-First) */}
+      <nav 
+        aria-label="Navegación móvil"
+        className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#0A0A0F]/95 backdrop-blur-xl border-t border-neutral-800/80 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around"
+      >
+        {/* Tab 1: Inicio */}
+        <button
+          type="button"
+          onClick={() => {
+            setWatchingItem(null);
+            setSelectedMediaType('all');
+            setSearchQuery('');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+            !watchingItem && selectedMediaType === 'all' && !searchQuery
+              ? 'text-[#FF1A24]'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Flame className={`h-5 w-5 transition-transform ${!watchingItem && selectedMediaType === 'all' && !searchQuery ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,26,36,0.7)]' : ''}`} />
+          <span className="text-[10px] font-bold mt-1 tracking-tight">Inicio</span>
+        </button>
+
+        {/* Tab 2: Películas */}
+        <button
+          type="button"
+          onClick={() => {
+            setWatchingItem(null);
+            setSelectedMediaType('movie');
+            setSearchQuery('');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+            !watchingItem && selectedMediaType === 'movie'
+              ? 'text-[#FF1A24]'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Film className={`h-5 w-5 transition-transform ${!watchingItem && selectedMediaType === 'movie' ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,26,36,0.7)]' : ''}`} />
+          <span className="text-[10px] font-bold mt-1 tracking-tight">Películas</span>
+        </button>
+
+        {/* Tab 3: Series */}
+        <button
+          type="button"
+          onClick={() => {
+            setWatchingItem(null);
+            setSelectedMediaType('tv');
+            setSearchQuery('');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+            !watchingItem && selectedMediaType === 'tv'
+              ? 'text-[#FF1A24]'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Tv className={`h-5 w-5 transition-transform ${!watchingItem && selectedMediaType === 'tv' ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,26,36,0.7)]' : ''}`} />
+          <span className="text-[10px] font-bold mt-1 tracking-tight">Series</span>
+        </button>
+
+        {/* Tab 4: Mi Lista */}
+        <button
+          type="button"
+          onClick={() => {
+            setWatchingItem(null);
+            setSelectedMediaType('watchlist');
+            setSearchQuery('');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`relative flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+            !watchingItem && selectedMediaType === 'watchlist'
+              ? 'text-[#FF1A24]'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <div className="relative">
+            <Bookmark className={`h-5 w-5 transition-transform ${!watchingItem && selectedMediaType === 'watchlist' ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,26,36,0.7)] text-[#FF1A24]' : ''}`} />
+            {currentUser?.watchlist && currentUser.watchlist.length > 0 && (
+              <span className="absolute -top-1 -right-2 min-w-4 h-4 px-1 rounded-full bg-[#FF1A24] text-white text-[9px] font-mono font-black flex items-center justify-center leading-none">
+                {currentUser.watchlist.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-bold mt-1 tracking-tight">Mi Lista</span>
+        </button>
+
+        {/* Tab 5: Panel Admin (si es Propietario/Admin) o Buscar */}
+        {isAdmin(currentUser) ? (
+          <button
+            type="button"
+            onClick={() => setIsAdminModalOpen(true)}
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+              isAdminModalOpen
+                ? 'text-amber-400'
+                : 'text-amber-400/80 hover:text-amber-300'
+            }`}
+          >
+            <Crown className="h-5 w-5 fill-amber-400 text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]" />
+            <span className="text-[10px] font-black mt-1 tracking-tight">Admin</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+              if (searchInput) {
+                searchInput.focus();
+                searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }}
+            className="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-neutral-200 transition-all cursor-pointer"
+          >
+            <Search className="h-5 w-5" />
+            <span className="text-[10px] font-bold mt-1 tracking-tight">Buscar</span>
+          </button>
+        )}
+      </nav>
 
       {/* Indicador de conectividad Offline */}
       <OfflineIndicator />

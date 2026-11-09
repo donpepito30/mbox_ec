@@ -111,13 +111,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       </button>
 
       {/* Contenido Principal y Carrusel de Portadas */}
-      <div className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:py-16 w-full flex flex-col justify-between gap-8">
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:py-12 sm:px-6 lg:py-16 w-full max-w-full min-w-0 flex flex-col justify-between gap-6 sm:gap-8">
         
         {/* Bloque Izquierdo: Información y Botones de Acción */}
-        <div className="max-w-2xl space-y-4">
+        <div className="max-w-2xl w-full min-w-0 space-y-3 sm:space-y-4">
           
-          {/* Metadatos superiores */}
-          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          {/* Metadatos superiores con ajuste responsive seguro */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-400">
             <span className="text-[#FF1A24] font-black tracking-wide">
               Mbox_Ec
             </span>
@@ -137,21 +137,21 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <span className="font-mono text-neutral-300">{year}</span>
           </div>
 
-          {/* Título Principal */}
-          <h1 className="text-3xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl text-balance leading-none drop-shadow-md">
+          {/* Título Principal Responsive */}
+          <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white text-balance leading-tight drop-shadow-md break-words min-w-0">
             {title}
           </h1>
 
           {/* Calificación */}
-          <div className="flex items-center gap-3 text-sm text-neutral-300">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-neutral-300">
             <span className="flex items-center gap-1 font-bold text-amber-400 font-mono tabular-nums">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+              <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-amber-400 text-amber-400" />
               {rating}
             </span>
             {activeItem.vote_count && (
               <>
                 <span aria-hidden="true" className="text-neutral-700">|</span>
-                <span className="text-xs text-neutral-400 font-mono tabular-nums">
+                <span className="text-[11px] sm:text-xs text-neutral-400 font-mono tabular-nums">
                   {activeItem.vote_count.toLocaleString()} valoraciones
                 </span>
               </>
@@ -159,17 +159,17 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           </div>
 
           {/* Sinopsis */}
-          <p className="line-clamp-3 text-sm sm:text-base leading-relaxed text-neutral-300 max-w-xl">
+          <p className="line-clamp-2 sm:line-clamp-3 text-xs sm:text-sm leading-relaxed text-neutral-300 max-w-xl">
             {activeItem.overview || 'Sinopsis completa disponible en la plataforma.'}
           </p>
 
-          {/* Botones de acción */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Botones de acción táctiles y ergonómicos en móviles */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1 sm:pt-2 w-full">
             <button
               type="button"
               tabIndex={0}
               onClick={() => onWatch(activeItem)}
-              className="inline-flex items-center gap-2.5 rounded-xl bg-[#FF1A24] px-6 py-3 text-sm font-bold text-white shadow-xl shadow-red-950/70 hover:bg-[#FF242E] transition-all cursor-pointer group"
+              className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl bg-[#FF1A24] px-4 py-2.5 sm:px-6 sm:py-3 text-xs sm:text-sm font-bold text-white shadow-xl shadow-red-950/70 hover:bg-[#FF242E] transition-all cursor-pointer group active:scale-95"
             >
               <Play className="h-4 w-4 fill-white group-hover:scale-110 transition-transform" />
               <span>Comenzar a ver</span>
@@ -179,7 +179,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               type="button"
               tabIndex={0}
               onClick={() => onDetail(activeItem)}
-              className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/90 px-5 py-3 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 transition cursor-pointer"
+              className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-neutral-800 bg-neutral-900/90 px-3.5 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-semibold text-neutral-200 hover:bg-neutral-800 transition cursor-pointer active:scale-95"
             >
               <Info className="h-4 w-4 text-[#FF1A24]" />
               <span>Ver ficha técnica</span>
@@ -190,7 +190,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 type="button"
                 tabIndex={0}
                 onClick={() => onToggleWatchlist(activeItem)}
-                className={`p-3 rounded-xl border transition cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-xl border transition cursor-pointer active:scale-95 shrink-0 ${
                   isSaved
                     ? 'bg-red-950/60 border-red-700 text-red-400'
                     : 'border-neutral-800 bg-neutral-900/80 text-neutral-300 hover:text-white'
@@ -204,10 +204,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
         </div>
 
-        {/* Bloque Inferior: Miniaturas Interactivas de Portadas de Películas */}
-        <div className="w-full pt-4">
+        {/* Bloque Inferior: Miniaturas Interactivas con Soporte Táctil Snap */}
+        <div className="w-full max-w-full min-w-0 pt-2 sm:pt-4">
           <div className="flex items-center justify-between pb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-400">
               Títulos Destacados
             </span>
             {/* Indicadores de Puntos */}
@@ -226,8 +226,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </div>
           </div>
 
-          {/* Carrusel de Mini-Portadas */}
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
+          {/* Carrusel de Mini-Portadas con Desplazamiento Suave y Touch-Pan */}
+          <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto pb-2 scrollbar-none snap-x touch-pan-x w-full max-w-full">
             {featuredList.map((item, idx) => {
               const itemPoster = getImageUrl(item.poster_path, 'w300');
               const itemTitle = item.title || item.name || 'Título';
@@ -239,7 +239,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   type="button"
                   tabIndex={0}
                   onClick={() => setActiveIndex(idx)}
-                  className={`group relative flex-shrink-0 w-24 sm:w-28 md:w-32 aspect-[2/3] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer ${
+                  className={`group relative shrink-0 snap-start w-20 sm:w-28 md:w-32 aspect-[2/3] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer ${
                     isSelected
                       ? 'border-2 border-red-600 scale-105 shadow-xl shadow-red-950 ring-2 ring-red-600/40'
                       : 'border-neutral-800/80 opacity-70 hover:opacity-100 hover:scale-102'
@@ -253,7 +253,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-                  <span className="absolute bottom-1.5 inset-x-1 text-[10px] font-bold text-white truncate text-center">
+                  <span className="absolute bottom-1 inset-x-1 text-[9px] sm:text-[10px] font-bold text-white truncate text-center">
                     {itemTitle}
                   </span>
                 </button>
