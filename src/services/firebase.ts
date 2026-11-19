@@ -268,21 +268,46 @@ export function subscribeToAllUsersFromFirestore(
   onUpdate: (users: Array<Record<string, any>>) => void,
   onError?: (err: Error) => void
 ): () => void {
-  const path = 'users';
-  return onSnapshot(
-    collection(db, 'users'),
-    (snapshot) => {
-      const users = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      onUpdate(users);
-    },
-    (error) => {
-      if (onError) onError(error);
-      console.warn('[Firestore Admin] Consulta en tiempo real de usuarios:', error.message);
+  let unsubscribeSnapshot: (() => void) | null = null;
+
+  const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    if (unsubscribeSnapshot) {
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = null;
     }
-  );
+
+    if (!user) {
+      if (onError) onError(new Error('Sin sesión activa en Firebase Auth'));
+      return;
+    }
+
+    try {
+      unsubscribeSnapshot = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          const users = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }));
+          onUpdate(users);
+        },
+        (error) => {
+          if (onError) onError(error);
+          console.warn('[Firestore Admin] Consulta en tiempo real de usuarios:', error.message);
+        }
+      );
+    } catch (err: any) {
+      if (onError) onError(err);
+      console.warn('[Firestore Admin] Error al iniciar suscripción:', err);
+    }
+  });
+
+  return () => {
+    unsubscribeAuth();
+    if (unsubscribeSnapshot) {
+      unsubscribeSnapshot();
+    }
+  };
 }
 
 /**
@@ -348,23 +373,30 @@ export async function deleteUserFromFirestore(userId: string): Promise<void> {
  * Suscribirse a las politicas globales del sistema en Firestore /settings/auth
  */
 export function subscribeToAuthSettingsFromFirestore(
-  onUpdate: (settings: { requireAdminApproval: boolean; maintenanceMode: boolean }) => void
+  onUpdate: (settings: { requireAdminApproval: boolean; maintenanceMode: boolean }) => void,
+  onError?: (err: Error) => void
 ): () => void {
-  return onSnapshot(
-    doc(db, 'settings', 'auth'),
-    (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        onUpdate({
-          requireAdminApproval: Boolean(data.requireAdminApproval),
-          maintenanceMode: Boolean(data.maintenanceMode),
-        });
+  try {
+    return onSnapshot(
+      doc(db, 'settings', 'auth'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          onUpdate({
+            requireAdminApproval: Boolean(data.requireAdminApproval),
+            maintenanceMode: Boolean(data.maintenanceMode),
+          });
+        }
+      },
+      (err) => {
+        if (onError) onError(err);
+        console.warn('[Firestore Settings] Suscripción a políticas:', err.message);
       }
-    },
-    (err) => {
-      console.warn('[Firestore Settings] Suscripción a políticas:', err.message);
-    }
-  );
+    );
+  } catch (err: any) {
+    if (onError) onError(err);
+    return () => {};
+  }
 }
 
 /**
@@ -414,24 +446,47 @@ export async function syncSecurityLogToFirestore(event: {
  * Suscribirse en tiempo real a los registros de auditoria de seguridad
  */
 export function subscribeToSecurityLogsFromFirestore(
-  onUpdate: (logs: Array<Record<string, any>>) => void
+  onUpdate: (logs: Array<Record<string, any>>) => void,
+  onError?: (err: Error) => void
 ): () => void {
-  try {
-    const q = query(collection(db, 'security_logs'), limit(100));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const logs = snapshot.docs.map((docSnap) => docSnap.data());
-        onUpdate(logs);
-      },
-      (err) => {
-        console.warn('[Firestore Audit Logs] Suscripción:', err.message);
-      }
-    );
-  } catch (err) {
-    console.warn('[Firestore Audit Logs] Query init error:', err);
-    return () => {};
-  }
+  let unsubscribeSnapshot: (() => void) | null = null;
+
+  const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    if (unsubscribeSnapshot) {
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = null;
+    }
+
+    if (!user) {
+      if (onError) onError(new Error('Sin sesión activa en Firebase Auth'));
+      return;
+    }
+
+    try {
+      const q = query(collection(db, 'security_logs'), limit(100));
+      unsubscribeSnapshot = onSnapshot(
+        q,
+        (snapshot) => {
+          const logs = snapshot.docs.map((docSnap) => docSnap.data());
+          onUpdate(logs);
+        },
+        (err) => {
+          if (onError) onError(err);
+          console.warn('[Firestore Audit Logs] Suscripción:', err.message);
+        }
+      );
+    } catch (err: any) {
+      if (onError) onError(err);
+      console.warn('[Firestore Audit Logs] Query init error:', err);
+    }
+  });
+
+  return () => {
+    unsubscribeAuth();
+    if (unsubscribeSnapshot) {
+      unsubscribeSnapshot();
+    }
+  };
 }
 
 /**

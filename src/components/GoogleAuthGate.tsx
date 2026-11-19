@@ -30,7 +30,12 @@ import {
   User,
 } from '../services/auth.ts';
 import { maskEmail } from '../services/security.ts';
-import { loginWithGoogle, checkRedirectAuthResult } from '../services/firebase.ts';
+import {
+  loginWithGoogle,
+  checkRedirectAuthResult,
+  onAuthStateChanged,
+  auth,
+} from '../services/firebase.ts';
 import { CinemaBoxLogo } from './CinemaBoxLogo.tsx';
 
 interface GoogleAuthGateProps {
@@ -160,7 +165,7 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
       }
     }
 
-    // Verificar si el usuario proviene de un flujo de redirección de Google
+    // 1. Verificar si el usuario proviene de un flujo de redirección de Google
     checkRedirectAuthResult()
       .then(async (firebaseUser) => {
         if (firebaseUser && firebaseUser.email) {
@@ -184,6 +189,37 @@ export const GoogleAuthGate: React.FC<GoogleAuthGateProps> = ({
         }
       })
       .catch(() => {});
+
+    // 2. Escuchar la persistencia de autenticación de Firebase (recuperación inmediata tras retorno de Google)
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email && !getCurrentUser()) {
+        if (isSuperAdmin(firebaseUser.email)) {
+          setPendingSuperAdmin({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          });
+          setSuccessMessage('Identidad verificada con Google. Ingresa tu PIN de Seguridad.');
+        } else {
+          try {
+            const user = await authenticateWithVerifiedGoogleUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+            });
+            onSuccess(user);
+          } catch (err) {
+            console.warn('Error al autenticar sesión persistente:', err);
+          }
+        }
+      }
+    });
+
+    return () => {
+      unsubAuth();
+    };
   }, [onSuccess]);
 
   // Verificar limitación de intentos y PIN al cargar

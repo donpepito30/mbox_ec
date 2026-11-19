@@ -41,11 +41,13 @@ import {
   isAdmin,
   User,
 } from './services/auth.ts';
+import { logSecurityEvent } from './services/security.ts';
 import {
   logoutUser as logoutFirebaseUser,
   addFavoriteToFirestore,
   removeFavoriteFromFirestore,
   subscribeToFavorites,
+  syncSecurityLogToFirestore,
 } from './services/firebase.ts';
 
 export default function App() {
@@ -140,10 +142,21 @@ export default function App() {
   }, [selectedMediaType, searchQuery, loadContent]);
 
   // Neutralizador Global de Pop-ups (Anti-Clickjacking / Ad Interceptor)
+  // Permite ventanas legítimas de autenticación de Google y Firebase mientras bloquea ventanas publicitarias
   useEffect(() => {
     const originalOpen = window.open;
-    window.open = function (url?: string | URL) {
-      console.warn('[Mbox_Ec Shield] Ventana emergente no autorizada interceptada:', url);
+    window.open = function (url?: string | URL, target?: string, features?: string) {
+      const urlStr = url ? String(url) : '';
+      if (
+        !urlStr ||
+        urlStr === 'about:blank' ||
+        urlStr.includes('accounts.google.com') ||
+        urlStr.includes('firebaseapp.com') ||
+        urlStr.includes('google.com')
+      ) {
+        return originalOpen.call(window, url, target, features);
+      }
+      console.warn('[Mbox_Ec Shield] Ventana emergente no autorizada interceptada:', urlStr);
       return null;
     };
     return () => {
@@ -151,7 +164,39 @@ export default function App() {
     };
   }, []);
 
-  // Navegación con Control Remoto (D-pad & Teclado Android TV)
+  // MEDIDA DE SEGURIDAD: Anti-Clickjacking / Frame Hijack Protection
+  useEffect(() => {
+    try {
+      if (window.self !== window.top) {
+        if (window.top && window.top.location.hostname !== window.location.hostname) {
+          logSecurityEvent(
+            'FRAME_HIJACK_DETECTED',
+            'CRITICAL',
+            'Detección de Clickjacking: La aplicación se encuentra embebida en un frame no autorizado.'
+          );
+        }
+      }
+    } catch {
+      // Bloqueo de acceso por política Cross-Origin (frame potencialmente hostil)
+      logSecurityEvent(
+        'FRAME_HIJACK_DETECTED',
+        'WARN',
+        'Contenedor iframe externo detectado y aislado por sandbox.'
+      );
+    }
+  }, []);
+
+  // Sincronización en tiempo real de registros de auditoría hacia Firestore
+  useEffect(() => {
+    const handleSecEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && currentUser?.role === 'SUPER_ADMIN') {
+        syncSecurityLogToFirestore(detail).catch(() => {});
+      }
+    };
+    window.addEventListener('mbox_security_event', handleSecEvent);
+    return () => window.removeEventListener('mbox_security_event', handleSecEvent);
+  }, [currentUser]);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
@@ -662,7 +707,8 @@ export default function App() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    maxLength={80}
+                    onChange={(e) => setSearchQuery(e.target.value.replace(/[<>'";\0]/g, ''))}
                     placeholder="Buscar películas o series..."
                     className="w-full rounded-xl border border-neutral-800 bg-[#0E0F14] pl-9 pr-8 py-2 text-xs text-white placeholder-neutral-500 focus:border-[#FF1A24] focus:outline-none transition"
                   />

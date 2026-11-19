@@ -179,7 +179,7 @@ export function validateGoogleEmail(email: string): { isValid: boolean; error?: 
  */
 export function checkRateLimit(): { isBlocked: boolean; remainingSeconds: number } {
   try {
-    const raw = sessionStorage.getItem(RATE_LIMIT_KEY);
+    const raw = localStorage.getItem(RATE_LIMIT_KEY) || sessionStorage.getItem(RATE_LIMIT_KEY);
     if (!raw) return { isBlocked: false, remainingSeconds: 0 };
 
     const data = JSON.parse(raw);
@@ -198,7 +198,7 @@ export function checkRateLimit(): { isBlocked: boolean; remainingSeconds: number
 
 export function recordFailedAttempt(): number {
   try {
-    const raw = sessionStorage.getItem(RATE_LIMIT_KEY);
+    const raw = localStorage.getItem(RATE_LIMIT_KEY) || sessionStorage.getItem(RATE_LIMIT_KEY);
     let attempts = 0;
     const now = Date.now();
 
@@ -219,10 +219,9 @@ export function recordFailedAttempt(): number {
       );
     }
 
-    sessionStorage.setItem(
-      RATE_LIMIT_KEY,
-      JSON.stringify({ attempts, blockedUntil, lastAttempt: now })
-    );
+    const payload = JSON.stringify({ attempts, blockedUntil, lastAttempt: now });
+    localStorage.setItem(RATE_LIMIT_KEY, payload);
+    sessionStorage.setItem(RATE_LIMIT_KEY, payload);
 
     return attempts;
   } catch {
@@ -232,6 +231,7 @@ export function recordFailedAttempt(): number {
 
 export function resetRateLimit(): void {
   try {
+    localStorage.removeItem(RATE_LIMIT_KEY);
     sessionStorage.removeItem(RATE_LIMIT_KEY);
   } catch {}
 }

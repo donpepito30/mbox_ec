@@ -207,7 +207,7 @@ export async function getDeviceFingerprint(): Promise<string> {
  */
 export function checkAdminPinRateLimit(): { isBlocked: boolean; remainingSeconds: number } {
   try {
-    const raw = sessionStorage.getItem(PIN_RATE_LIMIT_KEY);
+    const raw = localStorage.getItem(PIN_RATE_LIMIT_KEY) || sessionStorage.getItem(PIN_RATE_LIMIT_KEY);
     if (!raw) return { isBlocked: false, remainingSeconds: 0 };
     const data = JSON.parse(raw);
     const now = Date.now();
@@ -223,7 +223,7 @@ export function checkAdminPinRateLimit(): { isBlocked: boolean; remainingSeconds
 
 export function recordFailedAdminPinAttempt(): { attempts: number; isBlocked: boolean; remainingSeconds: number } {
   try {
-    const raw = sessionStorage.getItem(PIN_RATE_LIMIT_KEY);
+    const raw = localStorage.getItem(PIN_RATE_LIMIT_KEY) || sessionStorage.getItem(PIN_RATE_LIMIT_KEY);
     let attempts = 0;
     const now = Date.now();
     if (raw) {
@@ -235,7 +235,9 @@ export function recordFailedAdminPinAttempt(): { attempts: number; isBlocked: bo
     if (attempts >= MAX_PIN_FAILED_ATTEMPTS) {
       blockedUntil = now + PIN_LOCKOUT_MS;
     }
-    sessionStorage.setItem(PIN_RATE_LIMIT_KEY, JSON.stringify({ attempts, blockedUntil, lastAttempt: now }));
+    const payload = JSON.stringify({ attempts, blockedUntil, lastAttempt: now });
+    localStorage.setItem(PIN_RATE_LIMIT_KEY, payload);
+    sessionStorage.setItem(PIN_RATE_LIMIT_KEY, payload);
     const isBlocked = attempts >= MAX_PIN_FAILED_ATTEMPTS;
     const remainingSeconds = isBlocked ? Math.ceil(PIN_LOCKOUT_MS / 1000) : 0;
     return { attempts, isBlocked, remainingSeconds };
@@ -246,6 +248,7 @@ export function recordFailedAdminPinAttempt(): { attempts: number; isBlocked: bo
 
 export function resetAdminPinRateLimit(): void {
   try {
+    localStorage.removeItem(PIN_RATE_LIMIT_KEY);
     sessionStorage.removeItem(PIN_RATE_LIMIT_KEY);
   } catch {}
 }
@@ -282,6 +285,12 @@ export function logSecurityEvent(
 
     const updated = [newEvent, ...log].slice(0, MAX_AUDIT_LOG_ENTRIES);
     localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(updated));
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('mbox_security_event', { detail: newEvent }));
+      } catch {}
+    }
   } catch (err) {
     console.warn('[Mbox_ec Security Audit] Error al registrar evento:', err);
   }

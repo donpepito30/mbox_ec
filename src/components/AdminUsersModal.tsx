@@ -71,6 +71,7 @@ import {
   syncSecurityLogToFirestore,
   subscribeToSecurityLogsFromFirestore,
   syncUserProfile,
+  loginWithGoogle,
 } from '../services/firebase.ts';
 
 interface AdminUsersModalProps {
@@ -128,6 +129,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(true);
   const [pendingDeleteEmail, setPendingDeleteEmail] = useState<string | null>(null);
   const [isClearingLogsModal, setIsClearingLogsModal] = useState<boolean>(false);
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
 
   // Cargar usuarios y configuraciones (local + Firestore)
   const reloadData = () => {
@@ -138,6 +140,30 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     setAuditLogs(getSecurityAuditLog());
     setPinLockStatus(checkAdminPinRateLimit());
     setIsTmdbConnected(hasActiveReadAccessToken());
+  };
+
+  const handleConnectGoogle = async () => {
+    setIsConnectingGoogle(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const gUser = await loginWithGoogle();
+      if (gUser) {
+        setIsFirestoreConnected(true);
+        setActionSuccess('Conexión con Google Cloud Firestore activada con éxito.');
+        reloadData();
+      }
+    } catch (err: any) {
+      if (err.code === 'auth/popup-blocked') {
+        setActionError('El navegador bloqueó la ventana de Google. Permite ventanas emergentes para este dominio.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setActionError('Inicio de sesión cancelado.');
+      } else {
+        setActionError(err.message || 'No se pudo conectar con Google.');
+      }
+    } finally {
+      setIsConnectingGoogle(false);
+    }
   };
 
   // Suscripción en tiempo real a Firestore cuando el panel está abierto
@@ -192,23 +218,29 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     );
 
     // 2. Escuchar políticas de acceso en tiempo real
-    const unsubSettings = subscribeToAuthSettingsFromFirestore((settings) => {
-      setRequireApproval(settings.requireAdminApproval);
-    });
+    const unsubSettings = subscribeToAuthSettingsFromFirestore(
+      (settings) => {
+        setRequireApproval(settings.requireAdminApproval);
+      },
+      () => {}
+    );
 
     // 3. Escuchar registro de auditoría en tiempo real
-    const unsubLogs = subscribeToSecurityLogsFromFirestore((fLogs) => {
-      if (fLogs && fLogs.length > 0) {
-        setAuditLogs((prev) => {
-          const map = new Map<string, SecurityEvent>();
-          prev.forEach((l) => map.set(l.id, l));
-          (fLogs as SecurityEvent[]).forEach((l) => map.set(l.id, l));
-          return Array.from(map.values()).sort(
-            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          );
-        });
-      }
-    });
+    const unsubLogs = subscribeToSecurityLogsFromFirestore(
+      (fLogs) => {
+        if (fLogs && fLogs.length > 0) {
+          setAuditLogs((prev) => {
+            const map = new Map<string, SecurityEvent>();
+            prev.forEach((l) => map.set(l.id, l));
+            (fLogs as SecurityEvent[]).forEach((l) => map.set(l.id, l));
+            return Array.from(map.values()).sort(
+              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+          });
+        }
+      },
+      () => {}
+    );
 
     return () => {
       unsubUsers();
@@ -396,9 +428,18 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
     e.preventDefault();
     setActionError(null);
     setActionSuccess(null);
+    const sanitizedPin = newPinInput.trim();
+    if (sanitizedPin.length < 4) {
+      setActionError('El PIN debe tener al menos 4 caracteres.');
+      return;
+    }
+    if (sanitizedPin.length > 16) {
+      setActionError('El PIN no puede exceder 16 caracteres.');
+      return;
+    }
     try {
-      setMasterAdminPin(newPinInput);
-      setCurrentPin(newPinInput);
+      setMasterAdminPin(sanitizedPin);
+      setCurrentPin(sanitizedPin);
       setIsEditingPin(false);
       setNewPinInput('');
       setActionSuccess('¡PIN Maestro del Propietario actualizado con éxito!');
@@ -561,16 +602,27 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
 
         {/* Aviso de Modo de Sincronización en la Nube */}
         {!isFirestoreConnected && (
-          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-200 flex items-start gap-3">
-            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-bold text-amber-300">
-                Panel en Modo Local (Base de Datos en este dispositivo)
-              </p>
-              <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                Los cambios se almacenan de forma segura en este navegador. Para que los usuarios y roles se sincronicen en la nube de Google Cloud Firestore y aparezcan en tus despliegues externos de Vercel, inicia sesión con <strong>"Continuar con Google"</strong> usando tu cuenta oficial de Super Administrador.
-              </p>
+          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-amber-300">
+                  Panel en Modo Local (Base de Datos en este dispositivo)
+                </p>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Para que los usuarios y roles se sincronicen en la nube de Google Cloud Firestore y aparezcan en tus despliegues externos de Vercel, activa la conexión con tu cuenta de Google.
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={handleConnectGoogle}
+              disabled={isConnectingGoogle}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black px-3.5 py-2 text-xs font-black transition cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span>{isConnectingGoogle ? 'Conectando...' : 'Conectar con Google'}</span>
+            </button>
           </div>
         )}
 
@@ -692,8 +744,9 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                     <input
                       type="email"
                       required
+                      maxLength={128}
                       value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
+                      onChange={(e) => setNewEmail(e.target.value.trim().toLowerCase())}
                       placeholder="ejemplo@gmail.com"
                       className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-[#FF1A24] focus:outline-none"
                     />
@@ -705,8 +758,9 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                     </label>
                     <input
                       type="text"
+                      maxLength={64}
                       value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
+                      onChange={(e) => setNewName(e.target.value.replace(/[<>'";\0]/g, ''))}
                       placeholder="Nombre de pila o alias"
                       className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white placeholder-neutral-600 focus:border-[#FF1A24] focus:outline-none"
                     />
@@ -1137,9 +1191,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
                     <input
                       type="text"
                       required
+                      maxLength={16}
                       value={newPinInput}
-                      onChange={(e) => setNewPinInput(e.target.value)}
-                      placeholder="Nuevo PIN (mín. 4 car.)"
+                      onChange={(e) => setNewPinInput(e.target.value.slice(0, 16))}
+                      placeholder="Nuevo PIN (4-16 car.)"
                       className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white placeholder-neutral-500 focus:border-amber-400 focus:outline-none"
                     />
                     <button

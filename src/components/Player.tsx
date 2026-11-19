@@ -573,12 +573,13 @@ export const Player: React.FC<PlayerProps> = ({
               />
             )}
 
-            {/* Iframe del Reproductor AutoEmbed */}
+            {/* Iframe del Reproductor AutoEmbed Protegido con Sandbox */}
             <iframe
               key={`${iframeKey}-${providerIndex}`}
               src={streamUrl}
               title={title || 'Reproductor'}
               className="h-full w-full border-0"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture; screen-wake-lock"
               referrerPolicy="origin"
               allowFullScreen
