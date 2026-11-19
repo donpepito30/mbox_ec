@@ -21,6 +21,8 @@ import {
   Shield,
   Crown,
   Radio,
+  Award,
+  Lock,
 } from 'lucide-react';
 import { MediaItem, MediaType, MediaDetails } from './types/index.ts';
 import { getTrending, getMediaDetails, searchMedia, getImageUrl } from './services/tmdb.ts';
@@ -32,6 +34,9 @@ import { CinemaBoxLogo } from './components/CinemaBoxLogo.tsx';
 import { MediaDetailModal } from './components/MediaDetailModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
+import { initializeAntiPlagiarism } from './services/antiPlagiarism.ts';
+import { PlagiarismLockScreen } from './components/PlagiarismLockScreen.tsx';
+import { AuthorshipModal } from './components/AuthorshipModal.tsx';
 import {
   getCurrentUser,
   logoutUser,
@@ -69,6 +74,25 @@ export default function App() {
 
   // Modal de ficha técnica y trailer
   const [selectedDetailItem, setSelectedDetailItem] = useState<MediaItem | null>(null);
+
+  // BLINDAJE DE INTEGRIDAD: Verificación de Dominio Autorizado y Motor Anti-Plagio
+  const [integrityState] = useState(() => initializeAntiPlagiarism());
+  const [isBypassed, setIsBypassed] = useState<boolean>(false);
+  const [isAuthorshipModalOpen, setIsAuthorshipModalOpen] = useState<boolean>(false);
+  const [antiCopyToast, setAntiCopyToast] = useState<string | null>(null);
+
+  // Escuchar avisos de intercepción de copias o descargas no autorizadas
+  useEffect(() => {
+    const handleAntiCopyToast = (e: Event) => {
+      const msg = (e as CustomEvent).detail?.message;
+      if (msg) {
+        setAntiCopyToast(msg);
+        setTimeout(() => setAntiCopyToast(null), 3500);
+      }
+    };
+    window.addEventListener('mbox_anticopy_toast', handleAntiCopyToast);
+    return () => window.removeEventListener('mbox_anticopy_toast', handleAntiCopyToast);
+  }, []);
 
   // Sincronizar usuario activo
   const refreshUserSession = useCallback(() => {
@@ -284,6 +308,19 @@ export default function App() {
       .filter((item) => Boolean(item.poster_path))
       .map((item) => getImageUrl(item.poster_path, 'w500'));
   }, [items]);
+
+  // ==========================================================================
+  // BLOQUEO POR CLON O COPIA NO AUTORIZADA (ANTI-PLAGIARISM DOMAIN LOCK)
+  // Si el software se ejecuta en un dominio no autorizado, bloquea todo acceso
+  // ==========================================================================
+  if (!integrityState.isAuthorized && !isBypassed) {
+    return (
+      <PlagiarismLockScreen
+        unauthorizedHost={integrityState.currentHost}
+        onBypass={() => setIsBypassed(true)}
+      />
+    );
+  }
 
   // ==========================================================================
   // BLOQUEO TOTAL DE ACCESO (CONTENT GATE CERO-CONFIANZA)
@@ -912,10 +949,15 @@ export default function App() {
           <CinemaBoxLogo size="sm" />
 
           <div className="flex flex-col sm:flex-row items-center gap-4 text-neutral-400">
-            <div className="flex items-center gap-1.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setIsAuthorshipModalOpen(true)}
+              className="flex items-center gap-1.5 text-[11px] text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+              title="Auditar Certificado de Autoría y Licencia de Software"
+            >
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span>Control de Acceso y Permanencia Activo</span>
-            </div>
+              <span>Protección Anti-Plagio y Autoría Activa</span>
+            </button>
             <span className="hidden sm:inline text-neutral-700">·</span>
             <p>© 2026 Mbox_Ec · Tu cine en casa. Todos los derechos reservados.</p>
           </div>
@@ -1041,6 +1083,20 @@ export default function App() {
           </button>
         )}
       </nav>
+
+      {/* Modal de Certificado de Autoría y Licencia de Propiedad Intelectual */}
+      <AuthorshipModal
+        isOpen={isAuthorshipModalOpen}
+        onClose={() => setIsAuthorshipModalOpen(false)}
+      />
+
+      {/* Notificación flotante de protección de autoría */}
+      {antiCopyToast && (
+        <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-[9995] flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-neutral-950/95 border border-red-900/80 text-neutral-200 text-xs font-semibold shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2">
+          <Lock className="h-4 w-4 text-red-500 shrink-0" />
+          <span>{antiCopyToast}</span>
+        </div>
+      )}
 
       {/* Indicador de conectividad Offline */}
       <OfflineIndicator />

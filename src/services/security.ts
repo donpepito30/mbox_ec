@@ -18,7 +18,10 @@ export type SecurityEventType =
   | 'ADMIN_PIN_ATTEMPT_FAILED'
   | 'ADMIN_PIN_UPDATED'
   | 'POPUP_INTERCEPTED'
-  | 'FRAME_HIJACK_DETECTED';
+  | 'FRAME_HIJACK_DETECTED'
+  | 'PLAGIARISM_MIRROR_DETECTED'
+  | 'INSPECTION_ATTEMPT_DETECTED'
+  | 'ANTI_COPY_TRIGGERED';
 
 export interface SecurityEvent {
   id: string;

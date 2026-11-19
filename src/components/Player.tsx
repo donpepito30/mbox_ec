@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { isBraveBrowser, launchInBrave } from '../services/brave.ts';
+import { generatePlaybackToken } from '../services/antiPlagiarism.ts';
 
 export interface PlayerProps {
   /** Identificador de TMDb */
@@ -79,6 +80,9 @@ export const Player: React.FC<PlayerProps> = ({
 
   // Escudo silencioso invisible para absorber el primer clic sin mostrar avisos publicitarios
   const [shieldActive, setShieldActive] = useState<boolean>(true);
+
+  // Token efímero de reproducción anti-hotlinking y anti-leeching
+  const [playbackToken] = useState<string>(() => generatePlaybackToken(tmdbId));
 
   // Estado de Pantalla Completa (compatible con Smart TV y navegadores móviles / iOS Safari)
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -322,6 +326,7 @@ export const Player: React.FC<PlayerProps> = ({
       {/* Contenedor del Reproductor Estilo Netflix / Pluto TV */}
       <div
         ref={playerContainerRef}
+        onContextMenu={(e) => e.preventDefault()}
         className={`relative overflow-hidden bg-black shadow-2xl flex flex-col transition-all duration-300 ${
           isFullscreen
             ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen rounded-none border-0 p-0 m-0 bg-black flex flex-col justify-between'
@@ -347,6 +352,15 @@ export const Player: React.FC<PlayerProps> = ({
             <h2 className="text-xs sm:text-sm md:text-base font-bold text-white truncate tracking-tight">
               {title || (type === 'tv' ? 'Serie' : 'Película')}
             </h2>
+
+            {/* Sello de Autenticidad Mbox_Ec */}
+            <div
+              className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-900/80 border border-neutral-800 text-[10px] text-neutral-400 font-mono"
+              title="Transmisión oficial protegida por Mbox_Ec"
+            >
+              <Shield className="h-3 w-3 text-red-500" />
+              <span>MBOX_EC • Oficial</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">

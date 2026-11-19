@@ -33,7 +33,9 @@ import {
   Activity,
   Database,
   Radio,
+  Award,
 } from 'lucide-react';
+import { AuthorshipModal } from './AuthorshipModal.tsx';
 import {
   User,
   UserStatus,
@@ -130,6 +132,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const [pendingDeleteEmail, setPendingDeleteEmail] = useState<string | null>(null);
   const [isClearingLogsModal, setIsClearingLogsModal] = useState<boolean>(false);
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
+  const [isShowingAuthorship, setIsShowingAuthorship] = useState<boolean>(false);
 
   // Cargar usuarios y configuraciones (local + Firestore)
   const reloadData = () => {
@@ -1293,6 +1296,39 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               </div>
             </div>
 
+            {/* Blindaje Criptográfico y Protección de Propiedad Intelectual */}
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Award className="h-4 w-4 text-red-500" />
+                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                    Protección de Propiedad Intelectual y Anti-Plagio
+                  </h3>
+                </div>
+                <p className="text-xs text-neutral-400 max-w-xl">
+                  Sello criptográfico activo contra clonación no autorizada, robo de código e ingeniería inversa. Solo dominios verificados en la lista blanca pueden ejecutar esta plataforma.
+                </p>
+                <div className="flex items-center gap-2 pt-1 text-xs">
+                  <span className="text-neutral-400 font-mono">Estado:</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-lg text-[11px]">
+                    <ShieldCheck className="h-3 w-3" />
+                    Blindaje Activo • Dominio Protegido
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsShowingAuthorship(true)}
+                  className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Award className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Ver Certificado de Autoría</span>
+                </button>
+              </div>
+            </div>
+
             {/* Registro de Auditoría de Seguridad Forense */}
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -1456,6 +1492,12 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
         )}
 
       </div>
+
+      {/* Modal del Certificado Oficial de Autoría y Licencia */}
+      <AuthorshipModal
+        isOpen={isShowingAuthorship}
+        onClose={() => setIsShowingAuthorship(false)}
+      />
 
     </div>
   );
